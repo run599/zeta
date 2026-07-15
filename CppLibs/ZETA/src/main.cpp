@@ -4,6 +4,7 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include <Windows.h>
+#include <Shellapi.h>
 #include <TlHelp32.h>
 #include <string>
 #include <vector>
@@ -18,12 +19,12 @@
 #include <condition_variable>
 #include <functional>
 
-// zeta_ui.dll header - use dllimport since we're calling it, not defining it
+// zeta_ui.dll 头文件 — 使用 dllimport 因为我们调用它而非定义它
 #define ZETA_API __declspec(dllimport)
 #include "zeta_ui_export.h"
 #undef ZETA_API
 
-// C++ DLL headers - for reference types (actual calls via LoadLibrary)
+// C++ DLL 头文件 — 供引用类型使用（实际调用通过 LoadLibrary）
 #include <zeta_core.h>
 #include <zeta_driver.h>
 #include <zeta_engine.h>
@@ -33,7 +34,7 @@
 #include "verdict.h"
 
 // ============================================================
-// Global paths (dynamic, not hardcoded)
+// 全局路径（动态，非硬编码）
 // ============================================================
 static std::wstring g_exeDir;       // EXE 所在目录 (如 D:\ZETA)
 static std::wstring g_pluginsDir;   // Plugins 目录
@@ -42,13 +43,13 @@ static std::wstring g_logsDir;      // Logs 目录
 static std::wstring g_configDir;    // Config 目录 (C:\ProgramData\ZETA)
 
 // ============================================================
-// Global state
+// 全局状态
 // ============================================================
 static bool g_running = true;
-static std::wstring g_driverInitLog; // Cached driver init log (fetched before message loop starts)
+static std::wstring g_driverInitLog; // 缓存的驱动初始化日志（在消息循环启动前获取）
 
 // ============================================================
-// Crash handler - catches unhandled exceptions and writes crash log
+// 崩溃处理程序 — 捕获未处理异常并写入崩溃日志
 // ============================================================
 static LONG WINAPI crashHandler(EXCEPTION_POINTERS* ep) {
     std::wstring crashPath = g_logsDir + L"\\ZETA_CRASH.log";
@@ -57,7 +58,7 @@ static LONG WINAPI crashHandler(EXCEPTION_POINTERS* ep) {
     if (hCrash != INVALID_HANDLE_VALUE) {
         SYSTEMTIME st;
         GetLocalTime(&st);
-        char buf[4096];
+        char buf[8192];
         int n = sprintf_s(buf,
             "ZETA CRASH REPORT\n"
             "==================\n"
@@ -70,6 +71,34 @@ static LONG WINAPI crashHandler(EXCEPTION_POINTERS* ep) {
             ep->ExceptionRecord->ExceptionAddress,
             ep->ExceptionRecord->ExceptionFlags);
 
+        // ── 解析崩溃地址所在的模块名 ──
+        HMODULE hMod = NULL;
+        if (GetModuleHandleExW(
+                GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                (LPCWSTR)ep->ExceptionRecord->ExceptionAddress, &hMod)) {
+            wchar_t modPath[MAX_PATH] = {0};
+            DWORD modLen = GetModuleFileNameW(hMod, modPath, MAX_PATH);
+            if (modLen > 0) {
+                // 提取文件名（不含路径）
+                wchar_t* modName = modPath;
+                for (DWORD i = modLen - 1; i > 0; i--) {
+                    if (modPath[i] == L'\\' || modPath[i] == L'/') {
+                        modName = &modPath[i + 1];
+                        break;
+                    }
+                }
+                ULONG_PTR offset = (ULONG_PTR)ep->ExceptionRecord->ExceptionAddress
+                                 - (ULONG_PTR)hMod;
+                n += sprintf_s(buf + n, sizeof(buf) - n,
+                    "Module: %S (base=0x%p, offset=0x%IX)\n",
+                    modName, (void*)hMod, offset);
+            }
+        } else {
+            n += sprintf_s(buf + n, sizeof(buf) - n,
+                "Module: <unknown>\n");
+        }
+
         if (ep->ExceptionRecord->NumberParameters > 0) {
             n += sprintf_s(buf + n, sizeof(buf) - n, "Parameters: ");
             for (ULONG i = 0; i < ep->ExceptionRecord->NumberParameters && i < 15; i++) {
@@ -77,6 +106,24 @@ static LONG WINAPI crashHandler(EXCEPTION_POINTERS* ep) {
                     (void*)ep->ExceptionRecord->ExceptionInformation[i]);
             }
             n += sprintf_s(buf + n, sizeof(buf) - n, "\n");
+
+            // ── 检测异常参数中是否包含可打印的字符串数据 ──
+            // 常见情况：指针被字符串数据覆盖（如 wchar_t "tor"）
+            for (ULONG i = 0; i < ep->ExceptionRecord->NumberParameters && i < 15; i++) {
+                ULONG_PTR val = ep->ExceptionRecord->ExceptionInformation[i];
+                // 尝试以 wchar_t 字符串解释（最多显示前 8 个字符）
+                wchar_t wbuf[9] = {0};
+                for (int j = 0; j < 8 && j < (int)sizeof(val)/2; j++) {
+                    wchar_t wc = (wchar_t)((val >> (j * 16)) & 0xFFFF);
+                    if (wc >= 0x20 && wc < 0x80) wbuf[j] = wc;
+                    else if (wc == 0) { wbuf[j] = 0; break; }
+                    else { wbuf[j] = L'?'; }
+                }
+                if (wbuf[0] != 0) {
+                    n += sprintf_s(buf + n, sizeof(buf) - n,
+                        "  Param[%lu] contains ASCII: \"%S\"\n", i, wbuf);
+                }
+            }
         }
 
         if (ep->ContextRecord) {
@@ -96,6 +143,32 @@ static LONG WINAPI crashHandler(EXCEPTION_POINTERS* ep) {
                 (void*)ep->ContextRecord->R12, (void*)ep->ContextRecord->R13,
                 (void*)ep->ContextRecord->R14, (void*)ep->ContextRecord->R15,
                 (void*)ep->ContextRecord->Rip, ep->ContextRecord->EFlags);
+
+            // ── 检测常见寄存器中是否包含可打印的 ASCII 数据 ──
+            struct RegVal { const char* name; ULONG_PTR val; };
+            RegVal regs[] = {
+                {"RAX", ep->ContextRecord->Rax},
+                {"RBX", ep->ContextRecord->Rbx},
+                {"RCX", ep->ContextRecord->Rcx},
+                {"RDX", ep->ContextRecord->Rdx},
+                {"R8 ", ep->ContextRecord->R8},
+                {"R9 ", ep->ContextRecord->R9},
+                {"R10", ep->ContextRecord->R10},
+                {"R11", ep->ContextRecord->R11},
+            };
+            for (auto& r : regs) {
+                wchar_t wbuf[9] = {0};
+                for (int j = 0; j < 8 && j < (int)sizeof(r.val)/2; j++) {
+                    wchar_t wc = (wchar_t)((r.val >> (j * 16)) & 0xFFFF);
+                    if (wc >= 0x20 && wc < 0x80) wbuf[j] = wc;
+                    else if (wc == 0) { wbuf[j] = 0; break; }
+                    else { wbuf[j] = L'?'; }
+                }
+                if (wbuf[0] != 0) {
+                    n += sprintf_s(buf + n, sizeof(buf) - n,
+                        "  %s contains: \"%S\"\n", r.name, wbuf);
+                }
+            }
 #else
             n += sprintf_s(buf + n, sizeof(buf) - n,
                 "EAX=0x%p EBX=0x%p ECX=0x%p EDX=0x%p\n"
@@ -128,7 +201,7 @@ static void setupCrashHandler() {
 }
 
 // ============================================================
-// Console control handler - captures Ctrl+C, close, logoff, etc.
+// 控制台控制处理程序 — 捕获 Ctrl+C、关闭、注销等信号
 // ============================================================
 static BOOL WINAPI consoleHandler(DWORD dwCtrlType) {
     FILE* f = nullptr;
@@ -142,7 +215,7 @@ static BOOL WINAPI consoleHandler(DWORD dwCtrlType) {
         fprintf(f, "  CTRL_C=0, CTRL_BREAK=1, CTRL_CLOSE=2, CTRL_LOGOFF=5, CTRL_SHUTDOWN=6\n");
         fclose(f);
     }
-    // Log to app log as well
+    // 同时记录到应用日志
     const wchar_t* reason = L"unknown";
     switch (dwCtrlType) {
         case CTRL_C_EVENT:        reason = L"CTRL+C"; break;
@@ -152,19 +225,19 @@ static BOOL WINAPI consoleHandler(DWORD dwCtrlType) {
         case CTRL_SHUTDOWN_EVENT: reason = L"System shutdown"; break;
     }
     printf("[ZETA] Termination signal received: %ws\n", reason);
-    return FALSE; // Let other handlers process too
+    return FALSE; // 让其他处理程序也进行处理
 }
 
 static std::thread g_repairThread;
 
-// ── NT device path → DOS drive path conversion ──
+// ── NT 设备路径 → DOS 驱动器路径转换 ──
 static std::wstring ntToDosPath(const std::wstring& ntPath) {
-    // Build drive mapping
+    // 构建驱动器映射
     WCHAR drives[256] = {0};
     DWORD len = GetLogicalDriveStringsW(256, drives);
     if (!len || len >= 256) return ntPath;
 
-    // Try common mapping first (fast path)
+    // 先尝试常用映射（快速路径）
     static struct { WCHAR drive[4]; WCHAR ntPrefix[64]; } s_cache[26];
     static int s_cacheCount = -1;
 
@@ -182,7 +255,7 @@ static std::wstring ntToDosPath(const std::wstring& ntPath) {
         }
     }
 
-    // Build full map and try matching (in case drives changed)
+    // 构建完整映射并尝试匹配（以防驱动器发生变化）
     for (int i = 0; i < s_cacheCount; i++) {
         size_t prefixLen = wcslen(s_cache[i].ntPrefix);
         if (_wcsnicmp(ntPath.c_str(), s_cache[i].ntPrefix, prefixLen) == 0) {
@@ -192,7 +265,7 @@ static std::wstring ntToDosPath(const std::wstring& ntPath) {
         }
     }
 
-    // Fallback: scan all drives fresh
+    // 回退：重新扫描所有驱动器
     for (WCHAR* p = drives; *p; p += 4) {
         WCHAR target[128] = {0};
         p[2] = L'\0';
@@ -208,7 +281,7 @@ static std::wstring ntToDosPath(const std::wstring& ntPath) {
         p[2] = L'\\';
     }
 
-    return ntPath;  // Fallback: return original
+    return ntPath;  // 回退：返回原始路径
 }
 
 static std::wstring getProcessPath(DWORD pid) {
@@ -226,28 +299,97 @@ static std::wstring getProcessPath(DWORD pid) {
     return std::wstring(path);
 }
 
-// Forward declaration (defined later, after zeta_core.dll is loaded)
+// ============================================================
+// quarantineFile — 将文件移动到隔离目录
+// ============================================================
+static bool quarantineFile(const std::wstring& srcPath) {
+    if (srcPath.empty()) return false;
+
+    // 构建隔离目录路径
+    std::wstring qDir = L"C:\\ProgramData\\ZETA\\Quarantine";
+    CreateDirectoryW(qDir.c_str(), nullptr);
+
+    // 生成唯一名称：原始文件名 + 十六进制时间戳
+    wchar_t timestamp[32];
+    __int64 now;
+    QueryPerformanceCounter((LARGE_INTEGER*)&now);
+    swprintf_s(timestamp, L"%016llX", now);
+
+    std::wstring fname;
+    size_t pos = srcPath.find_last_of(L'\\');
+    if (pos != std::wstring::npos)
+        fname = srcPath.substr(pos + 1);
+    else
+        fname = srcPath;
+
+    std::wstring destPath = qDir + L"\\" + fname + L"." + timestamp;
+    std::wstring infoPath = destPath + L".info";
+
+    // 尝试1：MoveFileEx 带延迟到重启标志（处理已锁定/正在使用的文件）
+    // 即使文件仍作为可执行映像映射也可工作。
+    if (MoveFileExW(srcPath.c_str(), destPath.c_str(), MOVEFILE_WRITE_THROUGH)) {
+        // 成功：文件已同步移动
+    }
+    // 尝试2：跨卷回退（MoveFileEx 不支持跨卷操作）
+    else if (CopyFileW(srcPath.c_str(), destPath.c_str(), FALSE)) {
+        // 复制成功 → 尝试删除原文件。
+        // 重试循环：进程在 TerminateProcess 后可能仍在关闭中，
+        // 导致其 exe 文件保持锁定。在回退到重启删除之前，
+        // 以短延时重试若干次。
+        BOOL deleted = FALSE;
+        for (int retry = 0; retry < 10; retry++) {
+            deleted = DeleteFileW(srcPath.c_str());
+            if (deleted) break;
+            // 文件可能已被其他组件删除
+            if (GetFileAttributesW(srcPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+                deleted = TRUE;
+                break;
+            }
+            Sleep(200);  // 200ms × 10 = 总共 2s 等待
+        }
+        if (!deleted) {
+            // 所有重试均失败 → 标记为下次重启时删除
+            MoveFileExW(srcPath.c_str(), NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+        }
+    } else {
+        // 移动和复制均失败
+        return false;
+    }
+
+    // 写入 .info 文件，记录原始路径
+    HANDLE hInfo = CreateFileW(infoPath.c_str(), GENERIC_WRITE, 0, nullptr,
+                                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hInfo != INVALID_HANDLE_VALUE) {
+        DWORD written;
+        WriteFile(hInfo, srcPath.c_str(), (DWORD)(srcPath.size() * sizeof(wchar_t)), &written, nullptr);
+        CloseHandle(hInfo);
+    }
+
+    return true;
+}
+
+// 前向声明（稍后定义，在 zeta_core.dll 加载之后）
 static void appLog(const wchar_t* level, const wchar_t* action, const wchar_t* detail);
 
 // ============================================================
-// SafeTerminateProcess — avoid BSOD from critical processes
+// SafeTerminateProcess — 避免因关键进程导致蓝屏
 //
-// Problem: malicious software may call RtlSetProcessIsCritical()
-// to mark itself as a critical system process. Direct
-// TerminateProcess on such a process triggers
-// CRITICAL_PROCESS_DIED (0xEF) bluescreen.
+// 问题：恶意软件可能调用 RtlSetProcessIsCritical()
+// 将自身标记为关键系统进程。对此类进程直接调用
+// TerminateProcess 会触发
+// CRITICAL_PROCESS_DIED (0xEF) 蓝屏。
 //
-// Strategy (layered):
-//   1. Query ProcessBreakOnTermination flag
-//   2. If NOT critical → TerminateProcess (safe, fast)
-//   3. If IS critical  → CreateRemoteThread(ExitProcess)
-//      Self-termination via ExitProcess → NtTerminateProcess(NULL,0)
-//      bypasses the kernel's BreakOnTermination BSOD check.
-//      kernel32!ExitProcess has the same VA in all processes
-//      thanks to per-boot ASLR, so CreateRemoteThread just works.
+// 策略（分层）：
+//   1. 查询 ProcessBreakOnTermination 标志
+//   2. 如果非关键 → TerminateProcess（安全、快速）
+//   3. 如果是关键 → CreateRemoteThread(ExitProcess)
+//      通过 ExitProcess → NtTerminateProcess(NULL,0) 实现自我终止
+//      绕过内核的 BreakOnTermination BSOD 检查。
+//      kernel32!ExitProcess 在所有进程中具有相同的 VA
+//      （得益于每次启动的 ASLR），因此 CreateRemoteThread 可直接工作。
 // ============================================================
 
-// Process information class for BreakOnTermination
+// BreakOnTermination 的进程信息类
 #ifndef ProcessBreakOnTermination
 #define ProcessBreakOnTermination 29
 #endif
@@ -262,15 +404,42 @@ typedef NTSTATUS (NTAPI *fnNtQueryInformationProcess)(
     PULONG ReturnLength
 );
 
+// ── 启用 SeDebugPrivilege ──
+// 让 OpenProcess(PROCESS_TERMINATE) 能打开同权限级别（管理员）的进程
+static bool EnableSeDebugPrivilege() {
+    HANDLE hToken = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
+        return false;
+    }
+
+    TOKEN_PRIVILEGES tp;
+    tp.PrivilegeCount = 1;
+    tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+
+    if (!LookupPrivilegeValueA(nullptr, SE_DEBUG_NAME, &tp.Privileges[0].Luid)) {
+        CloseHandle(hToken);
+        return false;
+    }
+
+    BOOL ok = AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(tp), nullptr, nullptr);
+    DWORD err = GetLastError();
+    CloseHandle(hToken);
+
+    if (!ok || err != ERROR_SUCCESS) {
+        return false;
+    }
+    return true;
+}
+
 static bool SafeTerminateProcess(DWORD pid) {
-    // Open with all necessary rights for both paths
+    // 以两条路径所需的所有权限打开
     HANDLE hProcess = OpenProcess(
         PROCESS_QUERY_INFORMATION | PROCESS_CREATE_THREAD |
         PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_TERMINATE |
         PROCESS_SUSPEND_RESUME,
         FALSE, pid);
     if (!hProcess) {
-        // Fallback: try minimal rights for direct terminate
+        // 回退：尝试最小权限直接终止
         hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
         if (!hProcess) return false;
         TerminateProcess(hProcess, 1);
@@ -278,7 +447,7 @@ static bool SafeTerminateProcess(DWORD pid) {
         return true;
     }
 
-    // Step 1: Query BreakOnTermination flag
+    // 步骤1：查询 BreakOnTermination 标志
     BOOL isCritical = FALSE;
     HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll");
     if (hNtdll) {
@@ -291,17 +460,25 @@ static bool SafeTerminateProcess(DWORD pid) {
     }
 
     if (!isCritical) {
-        // Step 2a: Non-critical — direct terminate, no BSOD risk
+        // 步骤2a：非关键进程 — 直接终止，无蓝屏风险
         BOOL ok = TerminateProcess(hProcess, 1);
+        if (ok) {
+            // 等待进程完全退出（最多 15 秒）。
+            // TerminateProcess 是异步的 — 它通知所有线程
+            // 退出，但进程对象在真正终止前仍然存活。
+            // 如不等待，exe 文件将保持锁定状态，
+            // 后续的 quarantineFile() 将无法删除/移动它。
+            WaitForSingleObject(hProcess, 15000);
+        }
         CloseHandle(hProcess);
         return ok;
     }
 
-    // Step 2b: Critical process — use ExitProcess self-termination
+    // 步骤2b：关键进程 — 使用 ExitProcess 自我终止
     appLog(L"WARN", L"SafeTerm", (L"PID=" + std::to_wstring(pid) +
         L" is critical — using ExitProcess self-termination to avoid BSOD").c_str());
 
-    // kernel32!ExitProcess is at the same VA in all processes (per-boot ASLR)
+    // kernel32!ExitProcess 在所有进程中具有相同的 VA（每次启动的 ASLR）
     HMODULE hKernel32 = GetModuleHandleW(L"kernel32.dll");
     if (!hKernel32) {
         CloseHandle(hProcess);
@@ -315,29 +492,29 @@ static bool SafeTerminateProcess(DWORD pid) {
         return false;
     }
 
-    // CreateRemoteThread calls ExitProcess(0) in the target process.
+    // CreateRemoteThread 在目标进程中调用 ExitProcess(0)。
     // ExitProcess → RtlExitUserProcess → NtTerminateProcess(NtCurrentProcess(),0)
-    // Self-termination (NULL handle) bypasses the kernel's BreakOnTermination
-    // check that triggers CRITICAL_PROCESS_DIED bugcheck.
+    // 自我终止（NULL 句柄）绕过内核的 BreakOnTermination
+    // 检查（该检查会触发 CRITICAL_PROCESS_DIED bugcheck）。
     HANDLE hThread = CreateRemoteThread(hProcess, NULL, 0,
         pExitProcess, (LPVOID)0, 0, NULL);
     CloseHandle(hProcess);
 
     if (hThread) {
-        // Wait for the remote thread (and process) to exit
+        // 等待远程线程（和进程）退出
         WaitForSingleObject(hThread, 10000);
         CloseHandle(hThread);
         return true;
     }
 
-    // CreateRemoteThread may fail if the process is already dying or
-    // has no threads. In that case, the process is likely already
-    // terminating on its own, which is acceptable.
+    // CreateRemoteThread 可能在进程即将消亡或
+    // 没有线程时失败。此时，进程很可能已经
+    // 自行终止，这是可接受的。
     return false;
 }
 
-// ── Driver message throttle ──
-// Prevents Qt event loop flooding by limiting notifications per (code, pid) pair
+// ── 驱动消息节流 ──
+// 通过限制每个 (code, pid) 对的通知频率来防止 Qt 事件循环淹没
 #define THROTTLE_WINDOW_MS 3000
 #define THROTTLE_MAX_ENTRIES 64
 static struct {
@@ -354,13 +531,13 @@ static bool isThrottled(unsigned long code, unsigned long pid) {
     for (int i = 0; i < g_throttleCount; i++) {
         if (g_throttleEntries[i].code == code && g_throttleEntries[i].pid == pid) {
             if (now - g_throttleEntries[i].lastTimeMs < THROTTLE_WINDOW_MS) {
-                return true;  // throttled: skip notification
+                return true;  // 已节流：跳过通知
             }
             g_throttleEntries[i].lastTimeMs = now;
             return false;
         }
     }
-    // New entry
+    // 新条目
     if (g_throttleCount < THROTTLE_MAX_ENTRIES) {
         g_throttleEntries[g_throttleCount].code = code;
         g_throttleEntries[g_throttleCount].pid = pid;
@@ -371,7 +548,7 @@ static bool isThrottled(unsigned long code, unsigned long pid) {
 }
 
 // ============================================================
-// Async task queue (for background operations)
+// 异步任务队列（用于后台操作）
 // ============================================================
 static std::queue<std::function<void()>> g_taskQueue;
 static std::mutex g_taskMutex;
@@ -379,7 +556,7 @@ static std::condition_variable g_taskCv;
 static std::thread g_taskThread;
 
 // ============================================================
-// DLL function typedefs
+// DLL 函数类型定义
 // ============================================================
 
 // ZETA_Core.dll
@@ -426,16 +603,17 @@ typedef void (*fn_zeta_hips_popup_add_rule)(const wchar_t*);
 typedef int (*fn_zeta_hips_silverfox_analyze)(const wchar_t* const* files, int count,
     wchar_t* outType, int typeSize, wchar_t* outDetail, int detailSize);
 
-// (TrafficAnalyzer removed)
+// (TrafficAnalyzer 已移除)
 
 // zeta_ui.dll
 typedef void (*fn_zeta_ui_set_driver_status)(int);
 typedef void (*fn_zeta_ui_show_notification)(const wchar_t*, const wchar_t*, int);
 typedef void (*fn_zeta_ui_set_hips_response_callback)(void (*cb)(unsigned long, int));
 typedef void (*fn_zeta_ui_show_hips_prompt)(const wchar_t*, const wchar_t*, unsigned long, int);
+typedef void (*fn_zeta_ui_set_rules_path)(const wchar_t*);
 
 // ============================================================
-// Loaded DLL handles
+// 已加载的 DLL 句柄
 // ============================================================
 static HMODULE g_hCore = nullptr;
 static HMODULE g_hEngine = nullptr;
@@ -444,7 +622,7 @@ static HMODULE g_hMonitor = nullptr;
 static HMODULE g_hHips = nullptr;
 
 // ============================================================
-// DLL function pointers
+// DLL 函数指针
 // ============================================================
 static fn_zeta_core_log           p_zeta_core_log = nullptr;
 static fn_zeta_core_config_load   p_zeta_core_config_load = nullptr;
@@ -476,14 +654,15 @@ static fn_zeta_monitor_system_repair_exec    p_zeta_monitor_system_repair_exec =
 static fn_zeta_hips_popup_add_rule       p_zeta_hips_popup_add_rule = nullptr;
 static fn_zeta_hips_silverfox_analyze    p_zeta_hips_silverfox_analyze = nullptr;
 
-// (TrafficAnalyzer function pointers removed)
+// (TrafficAnalyzer 函数指针已移除)
 static fn_zeta_ui_set_driver_status p_zeta_ui_set_driver_status = nullptr;
 static fn_zeta_ui_show_notification p_zeta_ui_show_notification = nullptr;
 static fn_zeta_ui_set_hips_response_callback p_zeta_ui_set_hips_response_callback = nullptr;
 static fn_zeta_ui_show_hips_prompt p_zeta_ui_show_hips_prompt = nullptr;
+static fn_zeta_ui_set_rules_path p_zeta_ui_set_rules_path = nullptr;
 
 // ============================================================
-// Initialize paths dynamically
+// 动态初始化路径
 // ============================================================
 static void initPaths() {
     wchar_t exePath[MAX_PATH];
@@ -514,7 +693,7 @@ static void initPaths() {
     CreateDirectoryW(g_logsDir.c_str(), nullptr);
     CreateDirectoryW(g_configDir.c_str(), nullptr);
 
-    // Initialize VerdictWriter (creates Verdicts\ subdirectory)
+    // 初始化 VerdictWriter（创建 Verdicts\ 子目录）
     VerdictWriter::init(g_configDir);
 
     printf("[ZETA] Paths initialized: exe=%S, plugins=%S, config=%S\n",
@@ -522,7 +701,7 @@ static void initPaths() {
 }
 
 // ============================================================
-// Helper: Load DLL and get proc address
+// 辅助：加载 DLL 并获取函数地址
 // ============================================================
 template<typename T>
 bool loadDll(const wchar_t* dllName, HMODULE& handle, const char* funcName, T& funcPtr) {
@@ -545,18 +724,18 @@ bool loadDll(const wchar_t* dllName, HMODULE& handle, const char* funcName, T& f
 #define LOAD_DLL(dll, handle, func) loadDll(dll, handle, #func, p_ ## func)
 
 // ============================================================
-// App logging
+// 应用日志
 // ============================================================
 static void appLog(const wchar_t* level, const wchar_t* action, const wchar_t* detail) {
     if (p_zeta_core_log) {
         p_zeta_core_log(level, L"App", action, detail);
     }
-    // Also log to UI (thread-safe via Bridge)
+    // 同时记录到 UI（通过 Bridge 实现线程安全）
     zeta_ui_append_log(level, action, detail);
 }
 
 // ============================================================
-// getProcessName — resolve executable name from PID
+// getProcessName — 从 PID 解析可执行文件名
 // ============================================================
 static std::wstring getProcessName(unsigned long pid) {
     HANDLE h = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -574,7 +753,7 @@ static std::wstring getProcessName(unsigned long pid) {
 }
 
 // ============================================================
-// Auto-scan newly created processes
+// 自动扫描新创建的进程
 // ============================================================
 static void onNewProcessCreated(unsigned long pid, unsigned long ppid, 
                                 const wchar_t* name, const wchar_t* path) {
@@ -585,7 +764,7 @@ static void onNewProcessCreated(unsigned long pid, unsigned long ppid,
     std::wstring pathStr = path;
     std::wstring nameStr = name;
 
-    // Skip system processes and known safe paths
+    // 跳过系统进程和已知安全路径
     if (pathStr.find(L"\\System32\\") != std::wstring::npos ||
         pathStr.find(L"\\SysWOW64\\") != std::wstring::npos ||
         pathStr.find(L"\\Program Files\\") != std::wstring::npos ||
@@ -593,7 +772,7 @@ static void onNewProcessCreated(unsigned long pid, unsigned long ppid,
         return;
     }
 
-    // Only scan executable files
+    // 仅扫描可执行文件
     std::wstring ext;
     size_t dot = pathStr.find_last_of(L'.');
     if (dot != std::wstring::npos) {
@@ -604,7 +783,7 @@ static void onNewProcessCreated(unsigned long pid, unsigned long ppid,
         return;
     }
 
-    // Create scanner and scan
+    // 创建扫描器并扫描
     void* scanner = p_zeta_engine_create();
     if (!scanner) {
         std::wstring msg = L"Failed to create scanner for " + nameStr;
@@ -621,7 +800,7 @@ static void onNewProcessCreated(unsigned long pid, unsigned long ppid,
             L"\nScore=" + std::to_wstring(ret) + L"\n" + std::wstring(result);
         appLog(L"ALERT", L"AutoScan", msg.c_str());
         
-        // Report to EDR behavior engine
+        // 报告给 EDR 行为引擎
         ProcessBehaviorEngine::instance().reportScanScore(pid, ret, nameStr, pathStr);
     } else if (ret < 0) {
         std::wstring msg = L"Scan failed for " + nameStr + L": " + std::wstring(result);
@@ -633,7 +812,7 @@ static void onNewProcessCreated(unsigned long pid, unsigned long ppid,
 }
 
 // ============================================================
-// Async scan worker function (runs in background thread)
+// 异步扫描工作函数（在后台线程中运行）
 // ============================================================
 static void doScanWork(std::wstring methodStr) {
     if (!p_zeta_engine_scan_file || !p_zeta_engine_create || !p_zeta_engine_destroy) {
@@ -641,14 +820,14 @@ static void doScanWork(std::wstring methodStr) {
         return;
     }
 
-    // Create scanner
+    // 创建扫描器
     void* scanner = p_zeta_engine_create();
     if (!scanner) {
         appLog(L"ERROR", L"Scan", L"Failed to create scanner");
         return;
     }
 
-    // Determine scan targets
+    // 确定扫描目标
     std::vector<std::wstring> targets;
     if (methodStr == L"智能扫描") {
         wchar_t temp[MAX_PATH];
@@ -666,7 +845,7 @@ static void doScanWork(std::wstring methodStr) {
         targets.push_back(methodStr);
     }
 
-    // Phase 1: Collect all files (with progress)
+    // 阶段1：收集所有文件（带进度）
     appLog(L"INFO", L"Scan", L"Phase 1: Collecting files...");
     zeta_ui_set_status_text(L"正在收集文件...");
 
@@ -689,7 +868,7 @@ static void doScanWork(std::wstring methodStr) {
             if (hFind != INVALID_HANDLE_VALUE) {
                 do {
                     if (fd.cFileName[0] == L'.') continue;
-                    // Skip Windows system dirs
+                    // 跳过 Windows 系统目录
                     if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
                         std::wstring name = fd.cFileName;
                         if (name == L"System32" || name == L"SysWOW64" ||
@@ -699,12 +878,12 @@ static void doScanWork(std::wstring methodStr) {
                             name == L"System Volume Information" ||
                             name == L"Windows" && target != L"C:\\Windows") {
                             std::wstring full = dir + L"\\" + name;
-                            // Skip Windows entirely in non-C: drives
+                            // 在非 C: 盘上完全跳过 Windows
                             if (name == L"Windows") {
                                 DWORD attrs = GetFileAttributesW(full.c_str());
                                 if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_REPARSE_POINT))
                                     continue;
-                                // Check if it's junction/volume mount
+                                // 检查是否为交接点/卷挂载点
                                 continue;
                             }
                             continue;
@@ -718,9 +897,9 @@ static void doScanWork(std::wstring methodStr) {
         }
     }
 
-    // Phase 2: Walk again for actual files (limit depth for speed)
+    // 阶段2：再次遍历以获取实际文件（限制深度以提高速度）
     for (const auto& target : targets) {
-        std::vector<std::pair<std::wstring, int>> stack; // dir, depth
+        std::vector<std::pair<std::wstring, int>> stack; // 目录, 深度
         stack.push_back({ target, 0 });
         const int MAX_DEPTH = 6;
         while (!stack.empty()) {
@@ -753,7 +932,7 @@ static void doScanWork(std::wstring methodStr) {
         }
     }
 
-    // Phase 3: Scan each file
+    // 阶段3：扫描每个文件
     appLog(L"INFO", L"Scan", (L"Phase 2: Scanning " + std::to_wstring(allFiles.size()) + L" files").c_str());
     
     int total = (int)allFiles.size();
@@ -781,13 +960,13 @@ static void doScanWork(std::wstring methodStr) {
 }
 
 // ============================================================
-// Async system repair worker function
+// 异步系统修复工作函数
 // ============================================================
 static void doRepairWork() {
     zeta_ui_set_status_text(L"Running system repair...");
     appLog(L"INFO", L"Repair", L"Running system repair...");
 
-    // ── Repair Item 0: SFC Scan ──
+    // ── 修复项 0：SFC 扫描 ──
     zeta_ui_set_repair_item(0, L"运行中", L"-");
     {
         STARTUPINFOW si;
@@ -811,7 +990,7 @@ static void doRepairWork() {
         }
     }
 
-    // ── Repair Item 1: DISM ──
+    // ── 修复项 1：DISM ──
     zeta_ui_set_repair_item(1, L"运行中", L"-");
     {
         STARTUPINFOW si;
@@ -835,7 +1014,7 @@ static void doRepairWork() {
         }
     }
 
-    // ── Repair Item 2: Clean temp files ──
+    // ── 修复项 2：清理临时文件 ──
     zeta_ui_set_repair_item(2, L"运行中", L"-");
     {
         int cleaned = 0;
@@ -867,7 +1046,7 @@ static void doRepairWork() {
         appLog(L"INFO", L"Repair", msg);
     }
 
-    // ── Repair Item 3: Network/DNS reset ──
+    // ── 修复项 3：网络/DNS 重置 ──
     zeta_ui_set_repair_item(3, L"运行中", L"-");
     {
         _wsystem(L"ipconfig /flushdns");
@@ -878,7 +1057,7 @@ static void doRepairWork() {
         appLog(L"INFO", L"Repair", L"Network reset completed");
     }
 
-    // Run DLL repair function if available
+    // 如果可用，运行 DLL 修复函数
     if (p_zeta_monitor_system_repair_exec) {
         int fixed = p_zeta_monitor_system_repair_exec();
         wchar_t msg[128];
@@ -893,7 +1072,7 @@ static void doRepairWork() {
 }
 
 // ============================================================
-// Helper: Send driver command in background thread
+// 辅助：在后台线程中发送驱动命令
 // ============================================================
 void sendDriverCmdAsync(unsigned long cmd, const wchar_t* param, const wchar_t* cmdName) {
     std::thread([cmd, param, cmdName]() {
@@ -922,7 +1101,7 @@ bool sendDriverCmdWithRollback(unsigned long cmd, const wchar_t* param, const wc
     std::wstring msg = std::wstring(cmdName) + L": " + std::wstring(param) + L" (ret=" + std::to_wstring(ret) + L")";
     appLog(L"INFO", L"Driver", msg.c_str());
     
-    if (ret != 0) {
+    if (ret == 0) {
         zeta_ui_restore_switch(switchKey, 0);
         if (p_zeta_core_config_set_bool) p_zeta_core_config_set_bool(switchKey, 0);
         if (p_zeta_core_config_save) p_zeta_core_config_save();
@@ -936,12 +1115,12 @@ bool sendDriverCmdWithRollback(unsigned long cmd, const wchar_t* param, const wc
 }
 
 // ============================================================
-// Callback: User toggles a config switch
+// 回调：用户切换配置开关
 // ============================================================
 void __stdcall onConfigCallback(const wchar_t* key, int value) {
     appLog(L"INFO", L"Config", std::wstring(std::wstring(key) + L"=" + std::to_wstring(value)).c_str());
 
-    // Save to config file (quick operation, can be sync)
+    // 保存到配置文件（快速操作，可同步执行）
     if (p_zeta_core_config_set_bool) {
         p_zeta_core_config_set_bool(key, value);
     }
@@ -949,33 +1128,13 @@ void __stdcall onConfigCallback(const wchar_t* key, int value) {
         p_zeta_core_config_save();
     }
 
-    // Apply actual functionality based on key
+    // 根据键名应用实际功能
     std::wstring keyStr = key ? key : L"";
     std::wstring statusMsg;
 
     // ============================================================
     // 驱动级保护开关 (同步执行，失败时回滚UI状态)
     // ============================================================
-
-    if (keyStr == L"lineage_switch") {
-        if (value) {
-            sendDriverCmdWithRollback(6, L"1", L"Lineage tracker", L"lineage_switch", 
-                L"血缘追踪已启用", L"血缘追踪已禁用", L"血缘追踪启用失败", statusMsg);
-        } else {
-            sendDriverCmdAsync(6, L"0", L"Lineage tracker");
-            statusMsg = L"血缘追踪已禁用";
-        }
-    }
-
-    if (keyStr == L"ransom_exp_switch") {
-        if (value) {
-            sendDriverCmdWithRollback(7, L"1", L"Ransom exp", L"ransom_exp_switch", 
-                L"勒索检测已启用", L"勒索检测已禁用", L"勒索检测启用失败", statusMsg);
-        } else {
-            sendDriverCmdAsync(7, L"0", L"Ransom exp");
-            statusMsg = L"勒索检测已禁用";
-        }
-    }
 
     if (keyStr == L"process_switch") {
         if (value) {
@@ -1037,7 +1196,7 @@ void __stdcall onConfigCallback(const wchar_t* key, int value) {
         }
     }
 
-    // (traffic_switch removed)
+    // (traffic_switch 已移除)
 
     if (keyStr == L"learning_switch") {
         if (value) {
@@ -1059,18 +1218,18 @@ void __stdcall onConfigCallback(const wchar_t* key, int value) {
 }
 
 // ============================================================
-// DriverEventProcessor — Multi-threaded event handler
+// DriverEventProcessor — 多线程事件处理器
 //
-// onDriverMessage (driver message thread) = PRODUCER
-//   enqueue only → return immediately. Never blocks.
+// onDriverMessage（驱动消息线程）= 生产者
+//   仅入队 → 立即返回。永不阻塞。
 //
-// DriverEventProcessor worker thread = CONSUMER  
-//   dequeue → log, throttle, classify, notify, score
+// DriverEventProcessor 工作线程 = 消费者
+//   出队 → 记录日志、节流、分类、通知、评分
 //
-// 2001/3001 HIPS prompts still run on worker thread
-// (driver waits for reply on driver thread side; worker
-//  thread shows prompt → user clicks → reply sent to driver).
-// 6002 SilverFox sig verification runs on worker (async).
+// 2001/3001 HIPS 提示仍在工作线程上运行
+//（驱动在驱动线程侧等待回复；工作
+//  线程显示提示 → 用户点击 → 回复发送给驱动）。
+// 6002 SilverFox 签名验证在工作线程上运行（异步）。
 // ============================================================
 class DriverEventProcessor {
 public:
@@ -1087,8 +1246,8 @@ public:
         if (m_worker.joinable()) m_worker.join();
     }
 
-    // PRODUCER: called from onDriverMessage (message thread)
-    // Must be O(1) and never block.
+    // 生产者：从 onDriverMessage 调用（消息线程）
+    // 必须为 O(1) 且永不阻塞。
     void enqueue(unsigned long code, unsigned long pid,
                  const std::wstring& path, const std::wstring& action) {
         if (!m_running) return;
@@ -1127,15 +1286,20 @@ private:
         }
     }
 
-    // ── Risk level helpers ──
-    // CRITICAL (>=20pts): registry, disk write → always HIPS
-    // HIGH    (>=15pts): exe/dll/sys release → HIPS
-    // MEDIUM  (>=10pts): non-PE file release to protected path → EDR only
-    // LOW     (<10pts):  text/config files → EDR only
+    // ── 风险等级辅助 ──
+    // 严重（>=20分）：注册表、磁盘写入 → 始终触发 HIPS
+    // 高（>=15分）：exe/dll/sys 释放 → 触发 HIPS
+    // 中（>=10分）：非 PE 文件释放到受保护路径 → 仅 EDR
+    // 低（<10分）：文本/配置文件 → 仅 EDR
     static bool IsHighRiskFile(const std::wstring& path) {
-        // PE executables (exe, dll, sys, scr, ocx) are always high risk
+        // 仅 PE 可执行文件触发 HIPS 弹窗。非 PE 文件（.dat, .tmp, .bin, .txt 等）
+        // 在驱动层被静默允许，由 EDR 引擎评分。
+        // 无扩展名的路径通常是目录（如 Norton 的 GUID 文件夹），而非可执行文件，
+        // 驱动层的渐进响应已正确处理此类情况，不再视其为高风险。
         size_t dot = path.find_last_of(L'.');
-        if (dot == std::wstring::npos) return false;
+        if (dot == std::wstring::npos) {
+            return false;
+        }
         std::wstring ext = path.substr(dot);
         for (auto& c : ext) c = (wchar_t)towlower(c);
         return (ext == L".exe" || ext == L".dll" || ext == L".sys" ||
@@ -1148,25 +1312,26 @@ private:
         const std::wstring& pathStr = evt.path;
         const std::wstring& actionStr = evt.action;
 
+        // 对于 6002（SilverFox），在 ingest 之前先计算分析结果以传递详细信息
+        std::wstring sfDetail;
+        if (code == 6002) {
+            sfDetail = processSilverFoxSignature(pid, pathStr);
+        }
+
+        // 无论节流如何，始终摄入行为引擎（EDR 评分需要所有事件）
+        ProcessBehaviorEngine::instance().ingest(code, pid, pathStr, sfDetail);
+
+        // 节流：相同 (code, pid) 在 3 秒内只记录一次日志和一次 UI 通知
+        if (isThrottled(code, pid)) return;
+
         if (code != 6002) {
             appLog(L"INFO", L"DriverMsg",
                 (L"Code=" + std::to_wstring(code) + L" PID=" + std::to_wstring(pid) +
                  L" Action=" + actionStr + L" Path=" + pathStr).c_str());
         }
 
-        // For 6002 (SilverFox), compute analysis BEFORE ingest to pass detail through
-        std::wstring sfDetail;
-        if (code == 6002) {
-            sfDetail = processSilverFoxSignature(pid, pathStr);
-        }
-
-        // Always ingest into behavior engine regardless of throttle
-        ProcessBehaviorEngine::instance().ingest(code, pid, pathStr, sfDetail);
-
-        // Throttle is for UI notifications only; score engine already got the event
+        // 如果完全关闭通知/弹窗，这里直接返回
         if (!p_zeta_ui_show_notification) return;
-
-        if (isThrottled(code, pid)) return;
 
         int level = 0;
         std::wstring title;
@@ -1175,9 +1340,9 @@ private:
 
         switch (code) {
             case 2001:
-                // ── TIERED FILE PROTECTION ──
-                // HIGH risk (PE files) → HIPS popup immediately
-                // LOW risk (text/config/data) → silent EDR scoring only
+                // ── 分层文件防护 ──
+                // 高风险（PE 文件）→ 立即弹出 HIPS
+                // 低风险（文本/配置/数据）→ 仅静默 EDR 评分
                 if (IsHighRiskFile(pathStr)) {
                     level = 2;
                     title = L"文件防护拦截";
@@ -1185,8 +1350,8 @@ private:
                               L" 正在释放可执行文件到受保护路径:\n" + pathStr;
                     needsUserAction = true;
 
-                    // ── HIPS→EDR Linkage ──
-                    // Check user-mode HIPS rules for this event and report score to EDR
+                    // ── HIPS→EDR 联动 ──
+                    // 检查此事件的用户态 HIPS 规则并向 EDR 报告评分
                     HipsAction ruleAction = HipsEngine::instance().matchRule(code, getProcessName(pid), pathStr);
                     if (ruleAction == HIPS_DENY) {
                         ProcessBehaviorEngine::instance().reportHipsScore(pid,
@@ -1195,19 +1360,65 @@ private:
                         ProcessBehaviorEngine::instance().clearScore(pid);
                     }
                 } else {
-                    // LOW risk: silently add to EDR score, no popup
+                    // 低风险：静默添加到 EDR 评分，无弹窗
                     level = 0;
                 }
                 break;
+            case 2002:
+                // ── 隐藏文件防御 ──
+                // 无签名进程创建隐藏文件 → 自动终止 + 隔离（无弹窗）
+                level = -1;
+                {
+                    ProcessBehaviorEngine::instance().addPenaltyScore(pid, 50);
+                    appLog(L"WARN", L"EDR",
+                        (L"HIDDEN FILE auto-kill PID=" + std::to_wstring(pid) +
+                         L" (" + pathStr + L") penalty+50").c_str());
+
+                    // 在终止前解析路径 — 终止后无法
+                    // 打开进程句柄查询其映像路径。
+                    std::wstring dosPath = ntToDosPath(pathStr);
+                    std::wstring procPath = getProcessPath(pid);
+
+                    // 终止进程（等待完全退出以释放文件锁定）
+                    SafeTerminateProcess(pid);
+                    appLog(L"WARN", L"EDR",
+                        (L"已终止隐藏文件进程 PID=" + std::to_wstring(pid)).c_str());
+
+                    // 隔离正在创建的文件（尽力而为，可能尚不存在）
+                    if (!dosPath.empty() && quarantineFile(dosPath)) {
+                        appLog(L"WARN", L"EDR",
+                            (L"已隔离隐藏文件: " + dosPath).c_str());
+                    }
+                    // 同时隔离进程自身的可执行文件
+                    if (!procPath.empty() && quarantineFile(procPath)) {
+                        appLog(L"WARN", L"EDR",
+                            (L"已隔离进程主体: " + procPath).c_str());
+                    }
+                }
+                break;
+            case 2011:
+                // ── 学习模式：受保护路径事件 ──
+                // EDR 摄入以建立基线，无 HIPS 弹窗，无拦截
+                level = -1;
+                appLog(L"INFO", L"Learning",
+                    (L"PID=" + std::to_wstring(pid) + L" -> " + pathStr).c_str());
+                break;
+            case 2012:
+                // ── 学习模式：隐藏文件事件 ──
+                // 无签名进程在学习模式下创建隐藏文件
+                level = -1;
+                appLog(L"WARN", L"Learning",
+                    (L"HIDDEN FILE PID=" + std::to_wstring(pid) + L" -> " + pathStr).c_str());
+                break;
             case 3001:
-                // ── REGISTRY PROTECTION ── (always CRITICAL)
+                // ── 注册表保护 ──（始终为严重）
                 level = 2;
                 title = L"注册表防护拦截";
                 message = L"高危操作: 进程 " + std::to_wstring(pid) +
                           L" 正在修改受保护注册表:\n" + pathStr;
                 needsUserAction = true;
 
-                // ── HIPS→EDR Linkage ──
+                // ── HIPS→EDR 联动 ──
                 {
                     HipsAction ruleAction = HipsEngine::instance().matchRule(code, getProcessName(pid), pathStr);
                     if (ruleAction == HIPS_DENY) {
@@ -1219,14 +1430,14 @@ private:
                 }
                 break;
             case 4001:
-                // ── DISK WRITE ── (always CRITICAL)
+                // ── 磁盘写入 ──（始终为严重）
                 level = 2;
                 title = L"磁盘防护拦截";
                 message = L"高危操作: 进程 " + std::to_wstring(pid) +
                           L" 正在尝试低层级磁盘写入 (疑似勒索/磁盘擦写器):\n" + pathStr;
                 needsUserAction = true;
 
-                // ── HIPS→EDR Linkage ──
+                // ── HIPS→EDR 联动 ──
                 {
                     HipsAction ruleAction = HipsEngine::instance().matchRule(code, getProcessName(pid), pathStr);
                     if (ruleAction == HIPS_DENY) {
@@ -1238,7 +1449,7 @@ private:
                 }
                 break;
             case 5001:
-                // ── HIPS→EDR Linkage for Ransomware ──
+                // ── 勒索软件的 HIPS→EDR 联动 ──
                 {
                     HipsAction ruleAction = HipsEngine::instance().matchRule(code, getProcessName(pid), pathStr);
                     if (ruleAction == HIPS_DENY) {
@@ -1251,7 +1462,7 @@ private:
                 level = -1;
                 break;
             case 6001:
-                // ── HIPS→EDR Linkage for Code Injection ──
+                // ── 代码注入的 HIPS→EDR 联动 ──
                 {
                     HipsAction ruleAction = HipsEngine::instance().matchRule(code, getProcessName(pid), pathStr);
                     if (ruleAction == HIPS_DENY) {
@@ -1264,7 +1475,7 @@ private:
                 level = -1;
                 break;
             case 6002:
-                // ── HIPS→EDR Linkage for SilverFox ──
+                // ── SilverFox 的 HIPS→EDR 联动 ──
                 {
                     HipsAction ruleAction = HipsEngine::instance().matchRule(code, getProcessName(pid), pathStr);
                     if (ruleAction == HIPS_DENY) {
@@ -1277,6 +1488,58 @@ private:
                 level = -1;
                 break;
             case 7001: case 7003: level = -1; break;
+            case 7006: {
+                // ── 进程创建（来自驱动 PsSetCreateProcessNotifyRoutineEx）──
+                // Path 格式: "ImagePath(NT)\nCommandLine\nPPID"
+                level = -1;
+
+                size_t delim1 = pathStr.find(L'\n');
+                if (delim1 == std::wstring::npos) break;
+
+                std::wstring ntImagePath = pathStr.substr(0, delim1);
+                std::wstring cmdLine;
+                unsigned long ppid = 0;
+
+                size_t delim2 = pathStr.find(L'\n', delim1 + 1);
+                if (delim2 != std::wstring::npos) {
+                    cmdLine = pathStr.substr(delim1 + 1, delim2 - delim1 - 1);
+                    std::wstring ppidStr = pathStr.substr(delim2 + 1);
+                    ppid = _wtoi(ppidStr.c_str());
+                } else {
+                    cmdLine = pathStr.substr(delim1 + 1);
+                }
+
+                std::wstring dosPath = ntToDosPath(ntImagePath);
+                std::wstring procName;
+                size_t pos = dosPath.find_last_of(L'\\');
+                if (pos != std::wstring::npos) procName = dosPath.substr(pos + 1);
+
+                // 截断过长的命令行方便日志阅读
+                std::wstring logCmd = cmdLine;
+                if (logCmd.size() > 256) { logCmd.resize(256); logCmd += L"..."; }
+
+                appLog(L"INFO", L"ProcCreate",
+                    (L"PID=" + std::to_wstring(pid) + L" PPID=" + std::to_wstring(ppid) +
+                     L" " + procName + L"\n  Cmd: " + logCmd).c_str());
+
+                // 触发自动扫描（ProcessMonitor 轮询也会触发，但回调更快）
+                // 注意：LineageTracker 由 Polling ProcessMonitor 内部维护
+                if (!procName.empty()) {
+                    onNewProcessCreated(pid, ppid, procName.c_str(), dosPath.c_str());
+                }
+
+                // 记录命令行到行为引擎的 detail 字段
+                ProcessBehaviorEngine::instance().ingest(7006, pid, dosPath, cmdLine);
+                break;
+            }
+            case 7007: {
+                // ── 进程退出通知（驱动回调，仅作参考）──
+                // ProcessMonitor 轮询已覆盖退出检测，这里仅记录日志
+                level = -1;
+                appLog(L"DEBUG", L"ProcExit",
+                    (L"PID=" + std::to_wstring(pid)).c_str());
+                break;
+            }
             case 7004: level = 1; title = L"血统追踪回退";
                 message = L"内核级血统追踪不可用，已切换到用户态轮询模式"; break;
             case 7000: level = 0; title = L"驱动日志";
@@ -1291,7 +1554,7 @@ private:
                          L" [" + actionStr + L"] " + pathStr; break;
         }
 
-        // HIPS: only show for HIGH/CRITICAL risk operations
+        // HIPS：仅在高/严重风险操作时显示
         if (needsUserAction && p_zeta_ui_show_hips_prompt) {
             p_zeta_ui_show_hips_prompt(title.c_str(), message.c_str(), pid, level);
         } else if (level > 1 && p_zeta_ui_show_notification) {
@@ -1300,19 +1563,19 @@ private:
     }
 
     std::wstring processSilverFoxSignature(unsigned long pid, const std::wstring& pathStr) {
-        // Core logic: If the PROCESS ITSELF has a valid digital signature,
-        // skip SilverFox detection entirely.
+        // 核心逻辑：如果进程本身具有有效的数字签名，
+        // 则完全跳过 SilverFox 检测。
         // 
-        // SilverFox attack pattern: an unsigned malicious launcher releases
-        // signed legitimate installers + unsigned malware. The malicious
-        // launcher itself can NEVER have a valid signature because that
-        // would require stealing the legitimate publisher's private key.
+        // SilverFox 攻击模式：无签名的恶意启动器释放
+        // 已签名的合法安装程序 + 无签名恶意软件。恶意
+        // 启动器本身绝不可能拥有有效签名，因为那
+        // 需要窃取合法发布者的私钥。
         // 
-        // Legitimate scenario: A signed installer (e.g., 360 installer)
-        // releases signed components + unsigned temporary helpers. This is
-        // NORMAL and should NOT be flagged as SilverFox.
+        // 合法场景：有签名的安装程序（如 360 安装程序）
+        // 释放已签名的组件 + 无签名的临时辅助程序。这是
+        // 正常的，不应被标记为 SilverFox。
         // 
-        // Therefore: ONLY run SilverFox detection on UNSIGNED processes.
+        // 因此：仅对无签名进程运行 SilverFox 检测。
         if (p_zeta_engine_check_signature) {
             std::wstring processPath = getProcessPath(pid);
             if (!processPath.empty()) {
@@ -1344,7 +1607,7 @@ private:
         if (!p_zeta_hips_silverfox_analyze(
                 ptrs.data(), (int)ptrs.size(),
                 resultType, 32, resultDetail, 256)) {
-            return L""; // Clean
+            return L""; // 干净
         }
 
         appLog(L"WARN", L"SilverFox",
@@ -1369,14 +1632,14 @@ DriverEventProcessor& DriverEventProcessor::instance() {
 }
 
 // ============================================================
-// Callback: Driver message received (from kernel)
+// 回调：收到驱动消息（来自内核）
 // ============================================================
 void __stdcall onDriverMessage(unsigned long code, unsigned long pid, 
                                const wchar_t* path, const wchar_t* action) {
-    // Pure PRODUCER: enqueue only, return immediately.
-    // ALL processing (logging, throttle, switch/case, notification,
-    // SilverFox signature verification, behavior scoring) runs on
-    // the DriverEventProcessor worker thread.
+    // 纯生产者：仅入队，立即返回。
+    // 所有处理（日志记录、节流、switch/case、通知、
+    // SilverFox 签名验证、行为评分）均在
+    // DriverEventProcessor 工作线程上运行。
     DriverEventProcessor::instance().enqueue(
         code, pid,
         path ? std::wstring(path) : std::wstring(),
@@ -1384,7 +1647,7 @@ void __stdcall onDriverMessage(unsigned long code, unsigned long pid,
 }
 
 // ============================================================
-// Callback: User clicks a tool button
+// 回调：用户点击工具按钮
 // ============================================================
 void __stdcall onToolCallback(const wchar_t* tool) {
     appLog(L"INFO", L"Tool", tool);
@@ -1392,20 +1655,8 @@ void __stdcall onToolCallback(const wchar_t* tool) {
     std::wstring toolStr = tool ? tool : L"";
     if (toolStr.empty()) return;
 
-    // Handle experimental toggles
-    if (toolStr.find(L"toggle_lineage:") == 0) {
-        bool enabled = toolStr.find(L":1") != std::wstring::npos;
-        onConfigCallback(L"lineage_switch", enabled ? 1 : 0);
-        return;
-    }
-
-    if (toolStr.find(L"toggle_ransom:") == 0) {
-        bool enabled = toolStr.find(L":1") != std::wstring::npos;
-        onConfigCallback(L"ransom_exp_switch", enabled ? 1 : 0);
-        return;
-    }
-    
-    // (toggle_traffic removed)
+    // 处理实验性开关
+    // (toggle_traffic 已移除)
 
     if (toolStr.find(L"toggle_learning:") == 0) {
         bool enabled = toolStr.find(L":1") != std::wstring::npos;
@@ -1413,9 +1664,9 @@ void __stdcall onToolCallback(const wchar_t* tool) {
         return;
     }
 
-    // Tool actions
+    // 工具操作
     if (toolStr == L"系统修复") {
-        // Launch repair in background thread (non-blocking)
+        // 在后台线程中启动修复（非阻塞）
         if (g_repairThread.joinable()) {
             g_repairThread.detach();
         }
@@ -1478,7 +1729,7 @@ void __stdcall onToolCallback(const wchar_t* tool) {
         return;
     }
 
-    // (流量监控 tool handler removed)
+    // (流量监控 tool handler 已移除)
 
     if (toolStr == L"白名单") {
         zeta_ui_set_status_text(L"白名单管理");
@@ -1492,18 +1743,18 @@ void __stdcall onToolCallback(const wchar_t* tool) {
         return;
     }
 
-    // Unknown tool
+    // 未知工具
     appLog(L"INFO", L"Tool", std::wstring(L"Unknown tool: " + toolStr).c_str());
     zeta_ui_set_status_text(std::wstring(L"工具: " + toolStr).c_str());
 }
 
 // ============================================================
-// Forward declarations
+// 前向声明
 // ============================================================
 static bool installAndStartDriver();
 
 // ============================================================
-// Load all DLLs
+// 加载所有 DLL
 // ============================================================
 bool loadAllDlls() {
     printf("[ZETA] Loading C++ DLLs...\n");
@@ -1515,8 +1766,8 @@ bool loadAllDlls() {
     LOAD_DLL(L"ZETA_Core.dll", g_hCore, zeta_core_config_save);
     LOAD_DLL(L"ZETA_Core.dll", g_hCore, zeta_core_config_load);
 
-    // Init core first
-    // Load config so save() has a valid path
+    // 先初始化核心
+    // 加载配置，使 save() 有有效路径
     if (p_zeta_core_config_load) {
         p_zeta_core_config_load(L"C:\\ProgramData\\ZETA\\Config.json");
     }
@@ -1562,21 +1813,21 @@ bool loadAllDlls() {
     LOAD_DLL(L"ZETA_Monitor.dll", g_hMonitor, zeta_monitor_set_new_process_callback);
     LOAD_DLL(L"ZETA_Monitor.dll", g_hMonitor, zeta_monitor_lineage_enable);
     LOAD_DLL(L"ZETA_Monitor.dll", g_hMonitor, zeta_monitor_system_repair_exec);
-    // zeta_monitor_junk_clean_exec not exported yet, use fallback
+    // zeta_monitor_junk_clean_exec 尚未导出，使用回退
 
     // 5. ZETA_Hips.dll
     LOAD_DLL(L"ZETA_Hips.dll", g_hHips, zeta_hips_popup_add_rule);
     p_zeta_hips_silverfox_analyze = (fn_zeta_hips_silverfox_analyze)
         GetProcAddress(g_hHips, "zeta_hips_silverfox_analyze");
 
-    // (TrafficAnalyzer exports removed)
+    // (TrafficAnalyzer 导出已移除)
 
     printf("[ZETA] All DLLs loaded successfully\n");
 
     return true;
 }
 
-// ── Async driver install (runs in background, non-blocking) ──
+// ── 异步驱动安装（在后台运行，非阻塞） ──
 static void doDriverInstallWork() {
     printf("[ZETA] Starting async driver install...\n");
 
@@ -1588,76 +1839,136 @@ static void doDriverInstallWork() {
             printf("[ZETA] Driver connect: %s\n", connected ? "OK" : "FAILED");
             if (connected) {
                 driverLoaded = true;
-                // Register driver message callback
+                // 注册驱动消息回调
                 if (p_zeta_driver_set_msg_callback) {
                     p_zeta_driver_set_msg_callback(reinterpret_cast<void*>(onDriverMessage));
                     printf("[ZETA] Driver message callback registered\n");
                 }
-                // Register HIPS response callback (user clicks allow/block → driver)
-                // Called after dialog is already closed; FilterSendMessage returns fast (~μs)
+                // 注册 HIPS 响应回调（用户点击允许/拦截 → 驱动）
+                // 在对话框关闭后调用；FilterSendMessage 返回很快（~μs）
                 if (p_zeta_ui_set_hips_response_callback) {
                     p_zeta_ui_set_hips_response_callback([](unsigned long pid, int allow) {
-                        // ── HIPS-EDR Integration ──
-                        // User clicked Allow → tell EDR not to score this process
+                        // ── HIPS-EDR 集成 ──
+                        // 用户点击允许 → 告诉 EDR 不要对该进程评分
                         if (allow) {
                             ProcessBehaviorEngine::instance().markUserAllowed(pid);
                             appLog(L"INFO", L"HIPS",
                                 (L"Allow PID=" + std::to_wstring(pid) + L" (EDR: user approved → stopped scoring)").c_str());
                         }
-                        // User clicked Block → tell EDR to add penalty score
+                        // 用户点击拦截 → 告诉 EDR 添加惩罚评分
                         else {
                             ProcessBehaviorEngine::instance().addPenaltyScore(pid, 20);
                             appLog(L"INFO", L"HIPS",
                                 (L"Block PID=" + std::to_wstring(pid) + L" (EDR: penalty +20)").c_str());
                         }
 
-                        // Send decision to driver (ALLOW_OP=4, DENY_OP=5)
+                        // 向驱动发送决策（ALLOW_OP=4, DENY_OP=5）
                         if (p_zeta_driver_send_cmd) {
                             unsigned long cmd = allow ? 4 : 5;
                             p_zeta_driver_send_cmd(cmd, std::to_wstring(pid).c_str());
                         }
 
-                        // If blocked, terminate the offending process
+                        // 如果拦截，终止违规进程
                         if (!allow) {
+                            if (p_zeta_driver_send_cmd) {
+                                p_zeta_driver_send_cmd(8, std::to_wstring(pid).c_str());
+                            }
                             SafeTerminateProcess(pid);
                             appLog(L"WARN", L"HIPS", (L"Terminated PID=" + std::to_wstring(pid)).c_str());
                         }
                     });
                     printf("[ZETA] HIPS response callback registered\n");
                 }
-                // Register behavior engine callbacks
+                // 注册行为引擎回调
                 ProcessBehaviorEngine::instance().setAlertCallback(
                     [](ULONG pid, int score, const wchar_t* reasons,
                        const std::vector<std::wstring>& artifacts) {
-                        // Resolve process name
+                        // 解析进程名称
                         std::wstring procName = getProcessName(pid);
                         if (procName.empty()) procName = L"<未知进程>";
 
-                        // Log the alert (always show in log)
+                        // 记录告警（始终显示在日志中）
                         appLog(L"WARN", L"BehaviorAlert",
                             (L"PID=" + std::to_wstring(pid) +
                              L" Proc=" + procName +
                              L" Score=" + std::to_wstring(score) +
                              L" Reasons=" + (reasons ? reasons : L"")).c_str());
 
-                        // Write verdict (before UI action — file I/O is fast and non-blocking)
+                        // 写入判定（在 UI 操作之前 — 文件 I/O 快速且非阻塞）
                         if (reasons) {
                             Verdict v = Verdict::fromAlert(pid, score, reasons, {}, artifacts);
                             VerdictWriter::write(v);
                         }
 
-                        // EDR score >= 85 → definitive malicious → kill process
-                        // This is the cumulative risk verdict from many low-risk behaviors
-                        // that individually wouldn't trigger HIPS but together prove malice.
+                        // EDR 评分 >= 85 → 确定恶意 → 终止进程
+                        // 这是许多低风险行为的累积风险判定，
+                        // 单独来看不会触发 HIPS，但合在一起证明恶意。
+                        bool terminated = false;
                         if (score >= 85) {
-                            SafeTerminateProcess(pid);
-                            appLog(L"WARN", L"EDR",
-                                (L"EDR累计评分=" + std::to_wstring(score) +
-                                 L" 已达到阈值，自动终止进程 PID=" + std::to_wstring(pid)).c_str());
+                            // 在终止进程前解析进程路径。
+                            std::wstring procPath = getProcessPath(pid);
+
+                            // 1. 先隔离衍生物（进程还在运行，衍生物未被锁定）
+                            for (const auto& art : artifacts) {
+                                if (!art.empty() && quarantineFile(art)) {
+                                    appLog(L"WARN", L"EDR",
+                                        (L"已隔离衍生物: " + art).c_str());
+                                }
+                            }
+
+                            // 2. 标记进程为 HIPS 终止（驱动在进程退出时会删除其衍生物）
+                            //    必须在 SafeTerminateProcess 之前标记，
+                            //    否则驱动检测到进程退出时 WasHipsTerminated=FALSE，不会执行回滚。
+                            if (p_zeta_driver_send_cmd) {
+                                p_zeta_driver_send_cmd(8, std::to_wstring(pid).c_str());
+                            }
+
+                            // 3. 终止进程（等待完全退出以释放 exe 文件锁）
+                            //    进程退出 → 驱动 Rollback_Execute → 删除衍生物
+                            //    但主 exe 不在回滚列表中（回滚只记录进程创建的 PE，不是自身 exe）
+                            terminated = SafeTerminateProcess(pid);
+
+                            // 4. 进程退出后，隔离主 exe（带重试等待文件锁释放）
+                            if (terminated) {
+                                for (int retry = 0; retry < 5; retry++) {
+                                    if (!procPath.empty() && quarantineFile(procPath)) {
+                                        appLog(L"WARN", L"EDR",
+                                            (L"已隔离主文件: " + procPath).c_str());
+                                        break;
+                                    }
+                                    Sleep(500);  // 等待文件锁释放
+                                }
+                            } else {
+                                // 进程未终止，尝试直接隔离（可能失败）
+                                if (!procPath.empty() && quarantineFile(procPath)) {
+                                    appLog(L"WARN", L"EDR",
+                                        (L"已隔离主文件: " + procPath).c_str());
+                                }
+                            }
+
+                            appLog(terminated ? L"WARN" : L"ERROR", L"EDR",
+                                (terminated
+                                    ? (L"EDR累计评分=" + std::to_wstring(score) +
+                                       L" 已达到阈值，自动终止进程 PID=" + std::to_wstring(pid))
+                                    : (L"EDR累计评分=" + std::to_wstring(score) +
+                                       L" 已达到阈值，但终止进程失败 PID=" + std::to_wstring(pid) +
+                                       L"，请手动处理")).c_str());
                         }
 
-                        // Show HIPS prompt regardless, so user knows what happened
-                        if (p_zeta_ui_show_hips_prompt) {
+                        // 自动终结成功后 → 只读通知（无 Allow/Block 按钮，避免用户困惑）
+                        // 自动终结失败后 → HIPS 交互弹窗（让用户手动决策）
+                        if (score >= 85 && terminated) {
+                            if (p_zeta_ui_show_notification) {
+                                p_zeta_ui_show_notification(
+                                    L"行为风险告警 - 已自动终结",
+                                    (L"进程: " + procName +
+                                     L" (PID: " + std::to_wstring(pid) + L")\n" +
+                                     L"风险评分: " + std::to_wstring(score) + L"\n\n" +
+                                     (reasons ? reasons : L"") + L"\n\n"
+                                     L"进程已被自动终结并隔离。如确认无风险，请在设置中添加到白名单。").c_str(),
+                                    2);
+                            }
+                        } else if (p_zeta_ui_show_hips_prompt) {
                             p_zeta_ui_show_hips_prompt(
                                 L"行为风险告警",
                                 (L"进程: " + procName +
@@ -1670,7 +1981,7 @@ static void doDriverInstallWork() {
                 ProcessBehaviorEngine::instance().setWarnCallback(
                     [](ULONG pid, int score, const wchar_t* message,
                        const std::vector<std::wstring>& artifacts) {
-                        // Write warn-level verdict (score 30-59)
+                        // 写入警告级判定（评分 30-59）
                         if (message) {
                             Verdict v = Verdict::fromAlert(pid, score, message, {}, artifacts);
                             VerdictWriter::write(v);
@@ -1680,17 +1991,17 @@ static void doDriverInstallWork() {
                                 L"可疑行为", (message ? message : L""), 1);
                         }
                     });
-                // Start engine maintenance thread (30s interval)
+                // 启动引擎维护线程（30 秒间隔）
                 ProcessBehaviorEngine::instance().start();
                 ProcessBehaviorEngine::instance().loadWhitelist(
                     L"SYSTEM\\CurrentControlSet\\Services\\ZETA_Drv\\Parameters");
                 printf("[ZETA] Behavior engine initialized\n");
-                // Start event processor worker thread (processes all driver messages)
+                // 启动事件处理器工作线程（处理所有驱动消息）
                 DriverEventProcessor::instance().start();
                 printf("[ZETA] Event processor started\n");
-                // Start the driver message loop
-                // Fetch driver init log BEFORE message loop starts (after start the
-                // sendCommand goes through queue path and won't get the response)
+                // 启动驱动消息循环
+                // 在消息循环启动前获取驱动初始化日志（启动后
+                // sendCommand 走队列路径，无法获取响应）
                 if (p_zeta_driver_get_init_log) {
                     const wchar_t* log = p_zeta_driver_get_init_log();
                     if (log) g_driverInitLog = log;
@@ -1699,37 +2010,40 @@ static void doDriverInstallWork() {
                     p_zeta_driver_start_loop();
                     printf("[ZETA] Driver message loop started\n");
                 }
-                // Start process monitor
+                // 启动进程监控
                 if (p_zeta_monitor_start_process_monitor) {
                     p_zeta_monitor_start_process_monitor();
                     printf("[ZETA] Process monitor started\n");
                 }
 
-                // Set new process callback for auto-scanning
+                // 设置新进程回调以进行自动扫描
                 if (p_zeta_monitor_set_new_process_callback) {
                     p_zeta_monitor_set_new_process_callback(onNewProcessCreated);
                     printf("[ZETA] New process callback registered for auto-scan\n");
                 }
 
-                // Always enable lineage tracking (user-mode ETW fallback)
+                // 始终启用血统追踪（用户态 ETW 回退）
                 if (p_zeta_monitor_lineage_enable) {
                     p_zeta_monitor_lineage_enable();
                     printf("[ZETA] Lineage tracking enabled\n");
                 }
 
-                // (TrafficAnalyzer polling thread removed)
+                // 始终启用勒索软件检测
+                sendDriverCmdAsync(7, L"1", L"Ransom exp");
+
+                // (TrafficAnalyzer 轮询线程已移除)
             }
         }
     }
 
-    // Sync driver status to UI (thread-safe via invokeMethod)
+    // 同步驱动状态到 UI（通过 invokeMethod 实现线程安全）
     if (p_zeta_ui_set_driver_status) {
         p_zeta_ui_set_driver_status(driverLoaded ? 1 : 0);
     }
     if (driverLoaded) {
         zeta_ui_set_status_text(L"此装置已受到防护");
         appLog(L"INFO", L"Driver", L"Driver loaded successfully");
-        // Use cached driver init log (fetched before message loop started)
+        // 使用缓存的驱动初始化日志（在消息循环启动前获取）
         if (!g_driverInitLog.empty()) {
             std::wstring cleanLog = g_driverInitLog;
             for (size_t i = 0; i < cleanLog.size(); i++) {
@@ -1739,8 +2053,8 @@ static void doDriverInstallWork() {
             appLog(L"INFO", L"Driver", cleanLog.c_str());
             printf("[ZETA] %ws\n", g_driverInitLog.c_str());
 
-            // Parse driver init log to sync UI status with actual driver state
-            // ProcessProt=FAIL means self-protection is not supported/enabled
+            // 解析驱动初始化日志，使 UI 状态与实际驱动状态同步
+            // ProcessProt=FAIL 表示本系统不支持/未启用自我保护
             if (g_driverInitLog.find(L"ProcessProt=FAIL") != std::wstring::npos) {
                 zeta_ui_restore_switch(L"process_switch", 0);
                 if (p_zeta_core_config_set_bool) {
@@ -1752,14 +2066,14 @@ static void doDriverInstallWork() {
         
         appLog(L"INFO", L"Rules", L"========== Rule Loading Status ==========");
 
-        // Set Rules_Hips.json path before loading
+        // 在加载前设置 Rules_Hips.json 路径
         if (p_zeta_hips_set_rules_path) {
             std::wstring hipsRulesPath = g_pluginsDir + L"\\Rules\\Rules_Hips.json";
             p_zeta_hips_set_rules_path(hipsRulesPath.c_str());
             appLog(L"INFO", L"HIPS", (L"Rules path: " + hipsRulesPath).c_str());
         }
 
-        // Load user-mode HIPS rules from config and log result
+        // 从配置加载用户态 HIPS 规则并记录结果
         if (p_zeta_hips_load_rules) {
             appLog(L"INFO", L"HIPS", L"Loading Rules_Hips.json...");
             printf("[ZETA] Loading Rules_Hips.json...\n");
@@ -1779,7 +2093,7 @@ static void doDriverInstallWork() {
             printf("[ZETA] ERROR: zeta_hips_load_rules not available\n");
         }
 
-        // Load EDR rules
+        // 加载 EDR 规则
         std::wstring edrConfigPath = g_pluginsDir + L"\\Rules\\Rules_EDR.json";
         appLog(L"INFO", L"EDR", (L"Loading Rules_EDR.json from: " + edrConfigPath).c_str());
         printf("[ZETA] Loading Rules_EDR.json from: %ws\n", edrConfigPath.c_str());
@@ -1820,18 +2134,17 @@ static void doDriverInstallWork() {
 }
 
 // ============================================================
-// Restore UI state from config
+// 从配置恢复 UI 状态
 // ============================================================
 void restoreUiState() {
     appLog(L"INFO", L"App", L"Restoring UI state from config");
 
-    // Restore theme
+    // 恢复主题
     zeta_ui_set_theme(L"system_switch");
     zeta_ui_restore_combo(L"theme", L"system_switch");
 
-    // Restore settings switches (lineage, ransom, learning)
+    // 恢复设置开关（学习模式）
     const wchar_t* switches[] = {
-        L"lineage_switch", L"ransom_exp_switch",
         L"learning_switch"
     };
     for (const auto& key : switches) {
@@ -1844,7 +2157,7 @@ void restoreUiState() {
 }
 
 // ============================================================
-// Admin elevation + driver install
+// 管理员权限提升 + 驱动安装
 // ============================================================
 static bool isAdmin() {
     BOOL isElevated = FALSE;
@@ -1882,7 +2195,7 @@ static void ensureAdmin() {
         return;
     }
 
-    // Exit current (non-admin) process
+    // 退出当前（非管理员）进程
     printf("[ZETA] Elevated instance launched, exiting...\n");
     ExitProcess(0);
 }
@@ -1890,7 +2203,7 @@ static void ensureAdmin() {
 static bool installAndStartDriver() {
     const wchar_t* serviceName = L"ZETA_Drv";
 
-    // Use driver path directly from Plugins\Filter (no CopyFile to System32)
+    // 直接从 Plugins\Filter 使用驱动路径（不 CopyFile 到 System32）
     std::wstring driverPath = g_pluginsDir + L"\\Filter\\ZETA_Drv.sys";
 
     if (GetFileAttributesW(driverPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
@@ -1900,7 +2213,7 @@ static bool installAndStartDriver() {
 
     printf("[ZETA] Driver path: %S\n", driverPath.c_str());
 
-    // Try to force-unload any stuck driver instance first (with 5s timeout)
+    // 先尝试强制卸载任何卡住的驱动实例（带 5s 超时）
     printf("[ZETA] Attempting to unload any stuck driver instance...\n");
     {
         STARTUPINFOW si = { sizeof(si) };
@@ -1908,7 +2221,7 @@ static bool installAndStartDriver() {
         wchar_t cmdLine[] = L"fltmc unload ZETA_Drv";
         if (CreateProcessW(L"C:\\Windows\\System32\\fltmc.exe", cmdLine,
                            nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
-            WaitForSingleObject(pi.hProcess, 5000);  // 5s timeout
+            WaitForSingleObject(pi.hProcess, 5000);  // 5s 超时
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
         }
@@ -1921,11 +2234,11 @@ static bool installAndStartDriver() {
         return false;
     }
 
-    // Step 2: Check if service already exists
+    // 步骤2：检查服务是否已存在
     SC_HANDLE hSvc = OpenServiceW(hSCM, serviceName,
         SERVICE_START | SERVICE_QUERY_STATUS | SERVICE_CHANGE_CONFIG | DELETE);
     if (hSvc) {
-        // Service exists - check its state
+        // 服务已存在 — 检查其状态
         SERVICE_STATUS_PROCESS ssStatus;
         DWORD bytesNeeded = 0;
         if (QueryServiceStatusEx(hSvc, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssStatus, sizeof(ssStatus), &bytesNeeded)) {
@@ -1935,7 +2248,7 @@ static bool installAndStartDriver() {
                 CloseServiceHandle(hSCM);
                 return true;
             }
-            // Stopped - try to start it
+            // 已停止 — 尝试启动
             printf("[ZETA] Driver service exists but stopped - starting...\n");
             if (StartServiceW(hSvc, 0, nullptr)) {
                 printf("[ZETA] Driver started successfully\n");
@@ -1945,7 +2258,7 @@ static bool installAndStartDriver() {
                 return true;
             }
             DWORD startErr = GetLastError();
-            // Error 1058 = ERROR_SERVICE_DISABLED (BSOD recovery disabled the driver)
+            // 错误 1058 = ERROR_SERVICE_DISABLED（BSOD 恢复禁用了驱动）
             if (startErr == 1058) {
                 printf("[ZETA] Service is disabled (BSOD recovery) - re-enabling...\n");
                 ChangeServiceConfigW(hSvc, SERVICE_NO_CHANGE, SERVICE_DEMAND_START,
@@ -1982,7 +2295,7 @@ static bool installAndStartDriver() {
         }
     }
 
-    // Step 5: Create the service (with retry for ERROR_SERVICE_MARKED_FOR_DELETE 1072)
+    // 步骤5：创建服务（带 ERROR_SERVICE_MARKED_FOR_DELETE 1072 重试）
     hSvc = NULL;
     for (int retry = 0; retry < 10; retry++) {
         if (retry > 0) {
@@ -2019,13 +2332,13 @@ static bool installAndStartDriver() {
         return false;
     }
 
-    // Step 6: Set DependOnService = FltMgr (required for minifilter)
+    // 步骤6：设置 DependOnService = FltMgr（迷你过滤器必需）
     LPCWSTR fltMgrDeps[] = { L"FltMgr", nullptr };
     ChangeServiceConfig2W(hSvc, 3 /*SERVICE_CONFIG_DEPENDENCIES*/, (LPVOID)fltMgrDeps);
 
     CloseServiceHandle(hSvc);
 
-    // Step 7: Create required Filter Manager registry entries
+    // 步骤7：创建所需的过滤器管理器注册表项
     HKEY hKey;
     wchar_t regPath[256];
     swprintf_s(regPath, L"SYSTEM\\CurrentControlSet\\Services\\ZETA_Drv");
@@ -2058,7 +2371,7 @@ static bool installAndStartDriver() {
         RegCloseKey(hKey);
     }
 
-    // Step 8: Start the driver
+    // 步骤8：启动驱动
     printf("[ZETA] Starting driver...\n");
     hSvc = OpenServiceW(hSCM, serviceName, SERVICE_START | SERVICE_QUERY_STATUS);
     if (!hSvc) {
@@ -2107,11 +2420,11 @@ static void unloadDriver() {
         return;
     }
 
-    // Try to stop the driver service
+    // 尝试停止驱动服务
     SERVICE_STATUS ss;
     if (ControlService(hSvc, SERVICE_CONTROL_STOP, &ss)) {
         printf("[ZETA] Driver service stop signal sent\n");
-        // Wait up to 3 seconds for service to stop
+        // 最多等待 3 秒让服务停止
         for (int i = 0; i < 6; i++) {
             Sleep(500);
             SERVICE_STATUS_PROCESS ssStatus;
@@ -2132,7 +2445,7 @@ static void unloadDriver() {
         }
     }
 
-    // Delete the service
+    // 删除服务
     if (DeleteService(hSvc)) {
         printf("[ZETA] Driver service deleted\n");
     } else {
@@ -2159,16 +2472,16 @@ int main(int argc, char* argv[]) {
     printf("[ZETA] ZETA Security v2.0 - C++ Edition\n");
     printf("[ZETA] Initializing...\n");
 
-    // Initialize paths (dynamic, not hardcoded)
+    // 初始化路径（动态，非硬编码）
     initPaths();
 
-    // Set up crash handler to catch and log crashes
+    // 设置崩溃处理程序以捕获并记录崩溃
     setupCrashHandler();
 
-    // Set up console control handler to capture termination signals
+    // 设置控制台控制处理程序以捕获终止信号
     SetConsoleCtrlHandler(consoleHandler, TRUE);
 
-    // Check for admin flag to avoid infinite re-launch
+    // 检查管理员标志以避免无限重新启动
     bool alreadyElevated = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--admin") == 0) {
@@ -2176,12 +2489,15 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Ensure admin privileges
+    // 确保管理员权限
     if (!alreadyElevated) {
         ensureAdmin();
     }
 
-    // Check for hide flag
+    // 启用调试权限，让 SafeTerminateProcess 能打开同权限级别的进程
+    EnableSeDebugPrivilege();
+
+    // 检查隐藏标志
     bool hideOnStart = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "-hide") == 0) {
@@ -2189,12 +2505,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Set Qt plugin paths (dynamic)
+    // 设置 Qt 插件路径（动态）
     std::wstring platformsPath = g_exeDir + L"\\platforms";
     SetEnvironmentVariableW(L"QT_QPA_PLATFORM_PLUGIN_PATH", platformsPath.c_str());
     SetEnvironmentVariableW(L"QT_QPA_FONTDIR", g_exeDir.c_str());
 
-    // Initialize Qt UI first
+    // 先初始化 Qt UI
     printf("[ZETA] Initializing Qt UI...\n");
     if (zeta_ui_init() == 0) {
         printf("[ZETA] Failed to initialize Qt UI\n");
@@ -2202,11 +2518,11 @@ int main(int argc, char* argv[]) {
     }
     printf("[ZETA] Qt UI initialized\n");
 
-    // Register callbacks
+    // 注册回调
     zeta_ui_set_config_callback(onConfigCallback);
     zeta_ui_set_tool_callback(onToolCallback);
 
-    // Get zeta_ui_set_driver_status function pointer
+    // 获取 zeta_ui_set_driver_status 函数指针
     HMODULE hUi = GetModuleHandleW(L"zeta_ui.dll");
     if (hUi) {
         p_zeta_ui_set_driver_status = (fn_zeta_ui_set_driver_status)GetProcAddress(hUi, "zeta_ui_set_driver_status");
@@ -2225,18 +2541,24 @@ int main(int argc, char* argv[]) {
         if (p_zeta_ui_show_hips_prompt) {
             printf("[ZETA] Loaded zeta_ui_show_hips_prompt\n");
         }
+        p_zeta_ui_set_rules_path = (fn_zeta_ui_set_rules_path)GetProcAddress(hUi, "zeta_ui_set_rules_path");
+        if (p_zeta_ui_set_rules_path) {
+            printf("[ZETA] Loaded zeta_ui_set_rules_path\n");
+            std::wstring rulesPath = g_pluginsDir + L"\\Rules\\Rules_Hips.json";
+            p_zeta_ui_set_rules_path(rulesPath.c_str());
+        }
     }
 
-    // Load all C++ DLLs (fast, no driver install)
+    // 加载所有 C++ DLL（快速，无需驱动安装）
     if (!loadAllDlls()) {
         printf("[ZETA] WARNING: Some DLLs failed to load - functionality may be limited\n");
         appLog(L"WARN", L"App", L"Some DLLs failed to load");
     }
 
-    // Restore UI state
+    // 恢复 UI 状态
     restoreUiState();
 
-    // Show or hide window (show IMMEDIATELY, don't wait for driver)
+    // 显示或隐藏窗口（立即显示，不等待驱动）
     if (hideOnStart) {
         zeta_ui_hide();
         printf("[ZETA] Window hidden (start minimized to tray)\n");
@@ -2247,46 +2569,46 @@ int main(int argc, char* argv[]) {
         printf("[ZETA] Window shown\n");
     }
 
-    // Launch async driver install in background thread (non-blocking)
+    // 在后台线程中启动异步驱动安装（非阻塞）
     printf("[ZETA] Launching async driver install...\n");
     std::thread driverThread(doDriverInstallWork);
     driverThread.detach();
 
-    // Event loop
+    // 事件循环
     printf("[ZETA] Entering event loop\n");
     appLog(L"INFO", L"App", L"ZETA Security started");
     zeta_ui_exec();
 
-    // Cleanup
+    // 清理
     printf("[ZETA] Shutting down...\n");
 
-    // 0. Shutdown Qt UI FIRST - removes tray icon and window immediately
-    //    This prevents the user from clicking "退出" again during cleanup
+    // 0. 首先关闭 Qt UI — 立即移除托盘图标和窗口
+    //    防止用户在清理期间再次点击"退出"
     zeta_ui_shutdown();
 
-    // 1. Stop background services first
+    // 1. 先停止后台服务
     if (p_zeta_monitor_stop_process_monitor) p_zeta_monitor_stop_process_monitor();
     if (p_zeta_driver_stop_loop) p_zeta_driver_stop_loop();
     if (p_zeta_driver_disconnect) p_zeta_driver_disconnect();
     ProcessBehaviorEngine::instance().stop();
     DriverEventProcessor::instance().stop();
 
-    // 2. Unload the kernel driver service (ZETA_Drv.sys)
+    // 2. 卸载内核驱动服务 (ZETA_Drv.sys)
     unloadDriver();
 
-    // 3. Free C++ DLLs
+    // 3. 释放 C++ DLL
     if (g_hHips) FreeLibrary(g_hHips);
     if (g_hMonitor) FreeLibrary(g_hMonitor);
     if (g_hDriver) FreeLibrary(g_hDriver);
     if (g_hEngine) FreeLibrary(g_hEngine);
     if (g_hCore) FreeLibrary(g_hCore);
 
-    // 4. Wait for background threads to complete
+    // 4. 等待后台线程完成
     if (g_repairThread.joinable()) {
         g_repairThread.join();
     }
 
-    // 5. (zeta_ui_shutdown already called above - UI cleanup is done)
+    // 5. (zeta_ui_shutdown 已在上面调用 — UI 清理已完成)
 
     printf("[ZETA] Shutdown complete\n");
     return 0;

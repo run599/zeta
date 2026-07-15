@@ -18,8 +18,6 @@ struct UIMessage {
         MsgAppendLog,
         MsgSetTheme,
         MsgSetProtectionSwitch,
-        MsgSetLineageTracker,
-        MsgSetRansomExp,
         MsgSetStatusText,
         MsgUpdateHipsRules,
         MsgRestoreSwitch,

@@ -3,7 +3,7 @@ Signature   = "$WINDOWS NT$"
 Class       = ActivityMonitor
 ClassGuid   = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}
 Provider    = %ManufacturerName%
-DriverVer = 07/11/2026,2.5.32.950
+DriverVer = 07/15/2026,1.46.46.988
 CatalogFile = ZETA_Drv.cat
 PnpLockdown = 1
 

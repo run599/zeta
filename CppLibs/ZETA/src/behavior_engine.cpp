@@ -41,7 +41,7 @@ void ProcessBehaviorEngine::ingest(unsigned long code, unsigned long pid, const 
     // Quick inline check: only known event codes pass through
     switch (code) {
         case 2001: case 3001: case 4001: case 5001: case 5002:
-        case 6001: case 6002: case 7001: case 7003:
+        case 6001: case 6002: case 7001: case 7003: case 7006:
         case 8001: case 8002:
             break;
         default:

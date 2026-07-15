@@ -83,15 +83,15 @@ private:
     static constexpr int kBottomAreaH    = 48;
 
     // ── Colors (hard-coded for now; could be themed later) ──
-    static inline QColor cBg        { 0x1a, 0x1a, 0x2e };     // #1a1a2e
-    static inline QColor cBgHover   { 0x25, 0x25, 0x3d };     // #25253d
-    static inline QColor cBgPressed { 0x30, 0x30, 0x4a };     // #30304a
-    static inline QColor cBgSelected{ 0x22, 0x22, 0x3a };     // #22223a
-    static inline QColor cText      { 0xe8, 0xe8, 0xee };     // #e8e8ee
-    static inline QColor cTextDim   { 0x6c, 0x6c, 0x8a };     // #6c6c8a
-    static inline QColor cAccent    { 0x0a, 0x84, 0xff };     // #0a84ff
-    static inline QColor cGreen     { 0x34, 0xc7, 0x59 };     // #34c759 (online)
-    static inline QColor cRed       { 0xff, 0x3b, 0x30 };     // #ff3b30 (offline)
+    static inline QColor cBg        { 0x12, 0x12, 0x1f };     // #12121f
+    static inline QColor cBgHover   { 0x2a, 0x2a, 0x42 };     // #2a2a42
+    static inline QColor cBgPressed { 0x35, 0x35, 0x50 };     // #353550
+    static inline QColor cBgSelected{ 0x1e, 0x1e, 0x32 };     // #1e1e32
+    static inline QColor cText      { 0xf0, 0xf0, 0xf5 };     // #f0f0f5
+    static inline QColor cTextDim   { 0x7a, 0x7a, 0x9a };     // #7a7a9a
+    static inline QColor cAccent    { 0x4f, 0x46, 0xe5 };     // #4f46e5
+    static inline QColor cGreen     { 0x22, 0xc5, 0x5e };     // #22c55e (online)
+    static inline QColor cRed       { 0xef, 0x44, 0x44 };     // #ef4444 (offline)
 };
 
 #endif // NAVSIDEBAR_H

@@ -200,6 +200,7 @@ typedef struct _LINEAGE_NODE {
 extern LINEAGE_NODE g_LineageTable[LINEAGE_TABLE_SIZE];
 extern KSPIN_LOCK g_LineageLock;
 extern BOOLEAN g_LineageTrackerEnabled;
+extern BOOLEAN g_ProcessNotifyExActive;
 
 // Throttle entry: track last alert time per PID
 #define LINEAGE_THROTTLE_SIZE 64
@@ -253,11 +254,12 @@ typedef enum {
 
 #define TRUST_WINDOW_SEC (30 * 60)       // 30 minutes
 #define MAX_TRUST_WINDOW 128
+#define TRUST_WINDOW_PATH_LEN 260        // Max process path length (WCHARs)
 
 typedef struct _TRUST_WINDOW_ENTRY {
     LIST_ENTRY ListEntry;
-    ULONG ProcessId;
     LARGE_INTEGER ExpiryTime;
+    WCHAR ProcessPath[TRUST_WINDOW_PATH_LEN];  // Full NT device path, not PID
 } TRUST_WINDOW_ENTRY, * PTRUST_WINDOW_ENTRY;
 
 extern LIST_ENTRY g_TrustWindowList;
@@ -266,9 +268,10 @@ extern KSPIN_LOCK g_TrustWindowLock;
 TRUST_LEVEL GetProcessTrustLevel(HANDLE ProcessId);
 BOOLEAN IsProcessTrusted(HANDLE ProcessId);
 VOID InitializeTrustWindow();
-BOOLEAN IsInTrustWindow(ULONG ProcessId);
-VOID AddToTrustWindow(ULONG ProcessId);
-VOID RemoveFromTrustWindow(ULONG ProcessId);
+BOOLEAN IsInTrustWindow(PCWSTR ProcessPath);
+VOID AddToTrustWindow(PCWSTR ProcessPath);
+BOOLEAN GetProcessPathFromPid(ULONG ProcessId, PWCHAR OutPath, ULONG OutChars);
+VOID RemoveFromTrustWindow(PCWSTR ProcessPath);
 VOID CleanupTrustWindow();
 
 BOOLEAN RansomExp_CheckFirstWrite(PFLT_CALLBACK_DATA Data,
@@ -313,8 +316,9 @@ extern SILVERFOX_TRACKER g_SilverFoxTrackers[64];
 #define ZETA_CMD_ADD_WHITELIST 1
 #define ZETA_CMD_REMOVE_WHITELIST 2
 #define ZETA_CMD_GET_INITLOG 3
-#define ZETA_CMD_ALLOW_OP 4   // user 鈫?kernel: allow pending operation for PID
-#define ZETA_CMD_DENY_OP 5    // user 鈫?kernel: deny pending operation for PID
+#define ZETA_CMD_ALLOW_OP 4   // user → kernel: allow pending operation for PID
+#define ZETA_CMD_DENY_OP 5    // user → kernel: deny pending operation for PID
+#define ZETA_CMD_ROLLBACK_MARK 8  // user → kernel: mark PID for rollback
 
 // Pending operation: tracks a minifilter callback awaiting user-mode decision
 typedef struct _PENDING_OP {
@@ -400,6 +404,8 @@ typedef struct _DRIVER_STATE {
     BOOLEAN FilterStarted;
     BOOLEAN AnyFailure;
     BOOLEAN LineageTrackerOK;
+    BOOLEAN ProcessNotifyExOK;       // PsSetCreateProcessNotifyRoutineEx registered
+    NTSTATUS ProcessNotifyExStatus;  // exact NTSTATUS from PsSetCreateProcessNotifyRoutineEx
     BOOLEAN RansomExperimentalOK;
     ULONG RegistryBlockCount;
     ULONG RegistryTrustedCount;
@@ -473,12 +479,42 @@ VOID LineageTracker_OnProcessCreate(HANDLE ParentId, HANDLE ProcessId, BOOLEAN C
 VOID LineageTracker_OnFileRelease(ULONG ProcessId, PUNICODE_STRING FilePath);
 NTSTATUS LineageTracker_SetEnabled(BOOLEAN Enabled);
 
+// ── Simple File Rollback ──────────────────────────────────────────────
+// Records PE files created by untrusted processes.
+// When the process exits, all recorded files are deleted.
+#define ROLLBACK_MAX_FILES   32   // Max files tracked per PID
+#define ROLLBACK_MAX_PIDS    32   // Max simultaneous tracked PIDs
+
+typedef struct _ROLLBACK_ENTRY {
+    WCHAR Path[MAX_PATH_LEN];
+} ROLLBACK_ENTRY;
+
+typedef struct _ROLLBACK_TRACKER {
+    LONG  ProcessId;            // -1 = slot free
+    ROLLBACK_ENTRY Files[ROLLBACK_MAX_FILES];
+    LONG  FileCount;
+    LARGE_INTEGER StartTime;
+    BOOLEAN WasHipsTerminated;  // TRUE = process was terminated by HIPS
+} ROLLBACK_TRACKER;
+
+VOID Rollback_RecordFile(ULONG ProcessId, PUNICODE_STRING FilePath);
+VOID Rollback_MarkTerminated(ULONG ProcessId);
+VOID Rollback_Execute(ULONG ProcessId);
+
+extern KSPIN_LOCK g_RollbackLock;
+extern ROLLBACK_TRACKER g_RollbackTrackers[ROLLBACK_MAX_PIDS];
+// ── ── ── ── ── ── ── ── ── ── ──
+
 // Experimental ransomware detection
 BOOLEAN RansomExp_CheckWrite(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PUNICODE_STRING FileName, PVOID WriteBuffer, ULONG WriteLength);
 BOOLEAN RansomExp_IsKnownMagic(PUCHAR Header, ULONG HeaderLen);
 NTSTATUS RansomExp_SetEnabled(BOOLEAN Enabled);
 
 NTSTATUS SendMessageToUser(ULONG Code, ULONG Pid, PWCHAR Path, USHORT PathSize);
+
+// Process creation/exit events via PsSetCreateProcessNotifyRoutineEx
+#define ZETA_MSG_PROCESS_CREATE     7006  // process created (path=ImagePath\nCmdLine\nPPID)
+#define ZETA_MSG_PROCESS_EXIT       7007  // process exited
 
 // Log message code - sent to user-mode for logging
 #define ZETA_MSG_LOG 7000

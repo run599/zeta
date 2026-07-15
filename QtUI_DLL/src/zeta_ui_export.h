@@ -34,8 +34,6 @@ ZETA_API void zeta_ui_restore(void);
 ZETA_API void zeta_ui_append_log(const wchar_t* level, const wchar_t* action, const wchar_t* detail);
 ZETA_API void zeta_ui_set_theme(const wchar_t* theme_key);
 ZETA_API void zeta_ui_set_driver_status(int loaded);
-ZETA_API void zeta_ui_set_lineage_tracker(int enabled);
-ZETA_API void zeta_ui_set_ransom_exp(int enabled);
 ZETA_API void zeta_ui_set_status_text(const wchar_t* text);
 ZETA_API void zeta_ui_set_repair_item(int index, const wchar_t* status, const wchar_t* result);
 ZETA_API void zeta_ui_set_repair_buttons(int enabled);
@@ -51,6 +49,9 @@ ZETA_API void zeta_ui_show_hips_prompt(const wchar_t* title, const wchar_t* mess
 /* ── Restore initial state ───────────────────────────────────── */
 ZETA_API void zeta_ui_restore_switch(const wchar_t* key, int checked);
 ZETA_API void zeta_ui_restore_combo(const wchar_t* combo_name, const wchar_t* value);
+
+/* ── HIPS Rules management ──────────────────────────────────── */
+ZETA_API void zeta_ui_set_rules_path(const wchar_t* path);
 
 /* ── Callback registration ───────────────────────────────────── */
 ZETA_API void zeta_ui_set_config_callback(zeta_config_cb cb);

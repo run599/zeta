@@ -89,22 +89,6 @@ ZETA_API void zeta_ui_set_driver_status(int loaded) {
     }
 }
 
-ZETA_API void zeta_ui_set_lineage_tracker(int enabled) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    if (g_window) {
-        QMetaObject::invokeMethod(g_window, "onSetLineageTracker", Qt::QueuedConnection,
-            Q_ARG(bool, enabled != 0));
-    }
-}
-
-ZETA_API void zeta_ui_set_ransom_exp(int enabled) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    if (g_window) {
-        QMetaObject::invokeMethod(g_window, "onSetRansomExp", Qt::QueuedConnection,
-            Q_ARG(bool, enabled != 0));
-    }
-}
-
 ZETA_API void zeta_ui_set_status_text(const wchar_t* text) {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (g_window) {
@@ -180,6 +164,15 @@ ZETA_API void zeta_ui_restore_combo(const wchar_t* name, const wchar_t* value) {
         QString v = QString::fromWCharArray(value);
         QMetaObject::invokeMethod(g_window, "onRestoreCombo", Qt::QueuedConnection,
             Q_ARG(QString, n), Q_ARG(QString, v));
+    }
+}
+
+ZETA_API void zeta_ui_set_rules_path(const wchar_t* path) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_window) {
+        QString p = QString::fromWCharArray(path);
+        QMetaObject::invokeMethod(g_window, "onSetRulesPath", Qt::QueuedConnection,
+            Q_ARG(QString, p));
     }
 }
 

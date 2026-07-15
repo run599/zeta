@@ -143,9 +143,16 @@ NTSTATUS CompletePendingOperation(ULONG ProcessId, BOOLEAN Allow) {
              ProcessId, found->MessageCode, Allow ? "YES" : "NO");
 
     // P2: Trust window — if user allowed, add to 30-min trust window
-    // so the driver won't pend subsequent operations from this process
+    // Uses process PATH (not PID) so all processes sharing the same
+    // executable (e.g. Electron child processes) are covered.
     if (Allow) {
-        AddToTrustWindow(ProcessId);
+        WCHAR procPath[TRUST_WINDOW_PATH_LEN];
+        if (GetProcessPathFromPid(ProcessId, procPath, TRUST_WINDOW_PATH_LEN)) {
+            AddToTrustWindow(procPath);
+            DbgPrint("ZETA: Added to trust window via path: %ws\n", procPath);
+        } else {
+            DbgPrint("ZETA: WARNING - Could not resolve path for PID=%lu, trust window not set\n", ProcessId);
+        }
     }
 
     // Complete the pended operation

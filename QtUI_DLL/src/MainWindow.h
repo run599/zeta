@@ -46,16 +46,15 @@ public slots:
     void onSetTheme(const QString& themeKey);
     
     void onSetDriverStatus(bool loaded);  // 驱动状态同步
-    void onSetLineageTracker(bool enabled);
-    void onSetRansomExp(bool enabled);
     void onSetStatusText(const QString& text);
     void onRestoreSwitch(const QString& key, bool checked);
     void onRestoreCombo(const QString& name, const QString& value);
     void onSetRepairItem(int index, const QString& status, const QString& result);
     void onSetRepairButtons(bool enabled);
+    void onSetRulesPath(const QString& path);
     void onShowNotification(const QString& title, const QString& message, int level);
     void onShowHipsPrompt(const QString& title, const QString& message, unsigned long pid, int level);
-    void onUpdateDashboardStats(const QString& eventLine);
+    void onUpdateDashboardStats(const QString& level, const QString& action, const QString& detail = QString());
 
     // Tool page update slots
     void onRefreshProcessList();
@@ -170,6 +169,17 @@ private:
 
     // HIPS manager
     QTableWidget* m_hipsTable = nullptr;
+    QString m_rulesPath;
+    struct HipsRuleItem {
+        QString id;
+        QString code;
+        QString process;
+        QString target;
+        int action;   // 0=allow, 1=deny, 2=ask
+        int score;
+        bool enabled;
+    };
+    QVector<HipsRuleItem> m_rules;
 
     // Whitelist manager
     QTableWidget* m_whitelistTable = nullptr;
@@ -203,7 +213,7 @@ private:
     QCheckBox* m_chkEnableYara = nullptr;
     QCheckBox* m_chkEnablePeHeuristics = nullptr;
     QCheckBox* m_chkEnableSignature = nullptr;
-    QCheckBox* m_chkEnableEntropy = nullptr;
+    // (entropy checkbox removed - integrated into PE heuristics)
     
     // API/Section inputs
     QLineEdit* m_edrApiEdit = nullptr;
@@ -212,8 +222,6 @@ private:
     
 
     // Settings page
-    QCheckBox* m_lineageSwitch = nullptr;
-    QCheckBox* m_ransomSwitch = nullptr;
     QCheckBox* m_learningSwitch = nullptr;
     QComboBox* m_langCombo = nullptr;
 

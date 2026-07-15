@@ -140,6 +140,8 @@ void DriverComm::startMessageLoop() {
                     else if (code == 7001) actionType = L"lineage_alert";
                     else if (code == 7003) actionType = L"ransom_exp";
                     else if (code == 7004) actionType = L"lineage_fallback";
+                    else if (code == 7006) actionType = L"process_create";
+                    else if (code == 7007) actionType = L"process_exit";
 
                     m_externalCb(code, pid, path, actionType);
                 } catch (...) {}
@@ -271,6 +273,10 @@ bool DriverComm::allowOperation(unsigned long pid) {
 
 bool DriverComm::denyOperation(unsigned long pid) {
     return sendCommand(ZETA_CMD_DENY_OP, std::to_wstring(pid));
+}
+
+bool DriverComm::markRollback(unsigned long pid) {
+    return sendCommand(ZETA_CMD_ROLLBACK_MARK, std::to_wstring(pid));
 }
 
 void DriverComm::registerHandler(unsigned long code, MessageHandler handler) {

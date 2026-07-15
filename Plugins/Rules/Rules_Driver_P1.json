@@ -118,12 +118,27 @@
         "*\\Image File Execution Options\\displayswitch.exe\\*",
         "*\\Image File Execution Options\\atbroker.exe",
         "*\\Image File Execution Options\\atbroker.exe\\*",
+        "*\\Image File Execution Options\\*\\*",
+        "*\\Image File Execution Options\\*",
+        "*\\Image File Execution Options\\*\\Debugger",
+        "*\\Image File Execution Options\\*\\GlobalFlag",
+        "*\\Image File Execution Options\\*\\UseFilter",
+
+        "*\\SilentProcessExit\\*\\*",
+        "*\\SilentProcessExit\\*\\MonitorProcess",
+        "*\\SilentProcessExit\\*\\ReportingMode",
 
         "*\\AppInit_DLLs",
         "*\\Wow6432Node\\Microsoft\\Windows NT\\CurrentVersion\\AppInit_DLLs",
+        "*\\LoadAppInit_DLLs",
+        "*\\AppInit_DLLs\\*",
+
+        "*\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows\\AppInit_DLLs",
 
         "*\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\DisableAntiSpyware",
         "*\\SOFTWARE\\Policies\\Microsoft\\Microsoft Antimalware\\*",
+        "*\\SOFTWARE\\Microsoft\\Windows Defender\\Features\\TamperProtection",
+        "*\\SOFTWARE\\Microsoft\\Windows Defender\\Spynet\\SpynetReporting",
 
         "*\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging\\EnableScriptBlockLogging",
         "*\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging\\EnableModuleLogging",
@@ -131,6 +146,35 @@
 
         "*\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\StandardProfile\\EnableFirewall",
         "*\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\DomainProfile\\EnableFirewall",
+        "*\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\PublicProfile\\EnableFirewall",
+
+        "*\\CurrentControlSet\\Services\\RemoteAccess\\*",
+
+        "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\ProxyEnable",
+        "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\ProxyServer",
+        "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\ProxyOverride",
+        "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\AutoConfigURL",
+        "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\Wpad",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\\Connections\\DefaultConnectionSettings",
+
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\EnableLUA",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\ConsentPromptBehaviorAdmin",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\PromptOnSecureDesktop",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\FilterAdministratorToken",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\LocalAccountTokenFilterPolicy",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\EnableInstallerDetection",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\ValidateAdminCodeSignatures",
+
+        "*\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Shell",
+        "*\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Userinit",
+        "*\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\GPExtensions\\*",
+        "*\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Taskman",
+        "*\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\System",
+
+        "*\\SOFTWARE\\Microsoft\\Wbem\\CIMOM\\*",
+        "*\\SOFTWARE\\Microsoft\\Wbem\\ESS\\*",
+        "*\\CurrentControlSet\\Services\\Winmgmt\\*",
+        "*\\CurrentControlSet\\Services\\W32Time\\*",
 
         "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\\*",
         "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\*",
@@ -138,7 +182,39 @@
         "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnceEx\\*",
         "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run\\*",
         "*\\CurrentVersion\\Run\\*",
-        "*\\CurrentVersion\\RunOnce\\*"
+        "*\\CurrentVersion\\RunOnce\\*",
+
+        "*\\CurrentControlSet\\Services\\*\\ImagePath",
+        "*\\CurrentControlSet\\Services\\*\\ServiceDLL",
+
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\NoControlPanel",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\NoRun",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\NoFind",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\NoDesktop",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\NoDriveTypeAutoRun",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\NoDrives",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\DisallowRun\\*",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\NoViewOnDrive",
+
+        "*\\CurrentControlSet\\Control\\Lsa\\LimitBlankPasswordUse",
+        "*\\CurrentControlSet\\Control\\Lsa\\RestrictAnonymous",
+        "*\\CurrentControlSet\\Control\\Lsa\\RestrictAnonymousSAM",
+        "*\\CurrentControlSet\\Control\\Lsa\\DisableDomainCreds",
+        "*\\CurrentControlSet\\Control\\Lsa\\RunAsPPL",
+        "*\\CurrentControlSet\\Control\\Lsa\\NoLMHash",
+        "*\\CurrentControlSet\\Control\\Lsa\\ForceGuest",
+        "*\\CurrentControlSet\\Control\\Lsa\\FullPrivilegeAuditing",
+        "*\\CurrentControlSet\\Control\\Lsa\\Authentication Packages",
+        "*\\CurrentControlSet\\Control\\Lsa\\Notification Packages",
+        "*\\CurrentControlSet\\Control\\Lsa\\Security Packages",
+        "*\\CurrentControlSet\\Control\\SecurityProviders\\WDigest\\UseLogonCredential",
+
+        "*\\CurrentControlSet\\Control\\StorPort\\*",
+        "*\\CurrentControlSet\\Services\\Disk\\*",
+        "*\\CurrentControlSet\\Control\\CriticalDeviceDatabase\\*",
+
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Authentication\\LogonUI\\*",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Authentication\\Credential Providers\\*",
     ],
     "Rule_Registry_TrustedList": [
     ],
@@ -337,6 +413,8 @@
         "*\\Plugins\\Rules\\Rules_Driver_P1.json",
         "*\\ProgramData\\ZETA\\*.json",
         "\\Device\\HarddiskVolume*\\ProgramData\\*",
+        "\\Device\\HarddiskVolume*\\Users\\Public\\*",
+        "*\\Users\\Public\\*",
         "\\Device\\HarddiskVolume*\\Windows\\System32\\drivers\\*.sys",
         "\\Device\\HarddiskVolume*\\Windows\\SysWOW64\\drivers\\*.sys",
 
@@ -353,6 +431,11 @@
         "\\Device\\HarddiskVolume*\\Windows\\System32\\*.exe",
         "\\Device\\HarddiskVolume*\\Windows\\SysWOW64\\*.dll",
         "\\Device\\HarddiskVolume*\\Windows\\SysWOW64\\*.exe",
+        "\\Device\\HarddiskVolume*\\Windows\\System32\\Tasks\\*",
+        "\\Device\\HarddiskVolume*\\Windows\\Tasks\\*",
+        "\\Device\\HarddiskVolume*\\Windows\\SchedLgU.Txt",
+
+        "\\Device\\HarddiskVolume*\\Users\\*\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\*",
 
         "*\\CON",
         "*\\CON\\*",
@@ -377,6 +460,9 @@
         "*\\Local\\Temp\\*",
         "*\\ventoy\\Boot\\*",
         "*\\AdminRegionConfig.*",
+        "*\\AMD\\DxCache\\*",
+        "*\\NVIDIA\\*Cache\\*",
+        "*\\Intel\\ShaderCache\\*",
         "*\\nt_qq\\nt_*\\*",
         "*\\cache\\*",
         "*\\Documents\\My Games\\*",

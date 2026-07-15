@@ -103,7 +103,6 @@ struct EdrScanningEnabled {
     bool enableYara = true;
     bool enablePeHeuristics = true;
     bool enableSignatureCheck = true;
-    bool enableEntropyAnalysis = true;
 };
 
 class EdrRuleManager {

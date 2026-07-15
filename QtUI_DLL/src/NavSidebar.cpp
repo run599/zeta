@@ -50,79 +50,61 @@ QRect NavSidebar::labelRect(int idx) const {
 // ═══════════════════════════════════════════════════════════════
 
 QPainterPath NavSidebar::makeHomeIcon() {
-    // A simple house: roof triangle + body square + door
     QPainterPath path;
-    // Roof (triangle)
-    path.moveTo(11, 2);
-    path.lineTo(20, 11);
-    path.lineTo(20, 18);
-    path.lineTo(18, 18);
-    path.lineTo(18, 12);
-    path.lineTo(4, 12);
-    path.lineTo(4, 18);
-    path.lineTo(2, 18);
-    path.lineTo(2, 11);
-    path.closeSubpath();
-    // Body (from roof down left and right walls)
-    path.moveTo(4, 14);
+    path.moveTo(12, 2);
+    path.lineTo(20, 10);
+    path.lineTo(20, 20);
     path.lineTo(4, 20);
-    path.lineTo(18, 20);
-    path.lineTo(18, 14);
+    path.lineTo(4, 10);
     path.closeSubpath();
-    // Door
-    path.moveTo(9, 20);
-    path.lineTo(9, 15);
-    path.lineTo(13, 15);
-    path.lineTo(13, 20);
+    path.moveTo(8, 14);
+    path.lineTo(8, 20);
+    path.lineTo(16, 20);
+    path.lineTo(16, 14);
+    path.lineTo(12, 11);
     path.closeSubpath();
     return path;
 }
 
 QPainterPath NavSidebar::makeToolsIcon() {
-    // Wrench: simple L-shaped tool
     QPainterPath path;
-    path.moveTo(14, 2);
-    path.lineTo(18, 2);
-    path.lineTo(20, 4);
-    path.lineTo(20, 7);
-    path.lineTo(16, 11);
-    path.lineTo(13, 8);
-    path.lineTo(9, 12);
-    path.lineTo(7, 10);
-    path.lineTo(11, 6);
+    path.moveTo(18, 3);
+    path.lineTo(20, 5);
+    path.lineTo(20, 8);
+    path.lineTo(16, 12);
+    path.lineTo(13, 9);
+    path.lineTo(8, 14);
+    path.lineTo(6, 12);
+    path.lineTo(10, 8);
+    path.lineTo(8, 5);
+    path.lineTo(5, 8);
+    path.lineTo(3, 6);
+    path.lineTo(6, 3);
     path.lineTo(9, 3);
-    path.lineTo(6, 6);
-    path.lineTo(4, 4);
-    path.lineTo(7, 1);
-    path.lineTo(10, 1);
-    path.lineTo(14, 2);
+    path.lineTo(13, 4);
+    path.lineTo(16, 1);
+    path.lineTo(18, 3);
     path.closeSubpath();
     return path;
 }
 
 QPainterPath NavSidebar::makeShieldIcon() {
-    // Shield: trapezoid body + curved top
     QPainterPath path;
-    path.moveTo(9, 2);
-    path.lineTo(15, 2);
-    path.lineTo(19, 6);
-    path.lineTo(19, 12);
-    path.lineTo(12, 20);
-    path.lineTo(5, 12);
-    path.lineTo(5, 6);
+    path.moveTo(12, 2);
+    path.cubicTo(18, 2, 20, 6, 20, 12);
+    path.lineTo(12, 21);
+    path.lineTo(4, 12);
+    path.cubicTo(4, 6, 6, 2, 12, 2);
     path.closeSubpath();
-    // Checkmark inside
-    path.moveTo(9, 12);
-    path.lineTo(11, 14);
-    path.lineTo(15, 9);
+    path.moveTo(8, 13);
+    path.lineTo(11, 16);
+    path.lineTo(16, 9);
     return path;
 }
 
 QPainterPath NavSidebar::makeGearIcon() {
-    // Gear: circle with teeth
     QPainterPath path;
-    // Outer ring (teeth approximated as polygon)
-    const int cx = 11, cy = 11, rOuter = 10, rInner = 7;
+    const int cx = 12, cy = 12, rOuter = 10, rInner = 6;
     const int teeth = 8;
     for (int i = 0; i < teeth * 2; i++) {
         double angle = (i * 360.0 / (teeth * 2) - 90) * M_PI / 180.0;
@@ -133,8 +115,7 @@ QPainterPath NavSidebar::makeGearIcon() {
         else        path.lineTo(px, py);
     }
     path.closeSubpath();
-    // Inner hole
-    path.addEllipse(cx - 3, cy - 3, 6, 6);
+    path.addEllipse(cx - 4, cy - 4, 8, 8);
     return path;
 }
 
@@ -222,9 +203,8 @@ void NavSidebar::drawBackground(QPainter& p) {
 void NavSidebar::drawLogo(QPainter& p) {
     QRect logoRect(0, 0, width(), kLogoAreaHeight);
 
-    // Draw a simple shield icon as logo
     QPainterPath shield = makeShieldIcon();
-    QRect sr(16, 16, 28, 28);
+    QRect sr(18, 18, 32, 32);
     p.setPen(Qt::NoPen);
     p.setBrush(cAccent);
     p.translate(sr.topLeft());
@@ -232,21 +212,19 @@ void NavSidebar::drawLogo(QPainter& p) {
     p.drawPath(shield);
     p.resetTransform();
 
-    // Title "ZETA"
     QFont titleFont = font();
-    titleFont.setPixelSize(16);
+    titleFont.setPixelSize(18);
     titleFont.setBold(true);
     p.setFont(titleFont);
     p.setPen(cText);
-    p.drawText(52, 16, 130, 28, Qt::AlignLeft | Qt::AlignVCenter, "ZETA");
+    p.drawText(58, 20, 130, 28, Qt::AlignLeft | Qt::AlignVCenter, "ZETA");
 
-    // Subtitle "SECURITY"
     QFont subFont = font();
-    subFont.setPixelSize(9);
-    subFont.setLetterSpacing(QFont::AbsoluteSpacing, 3);
+    subFont.setPixelSize(10);
+    subFont.setLetterSpacing(QFont::AbsoluteSpacing, 4);
     p.setFont(subFont);
     p.setPen(cTextDim);
-    p.drawText(52, 40, 130, 20, Qt::AlignLeft | Qt::AlignVCenter, "SECURITY");
+    p.drawText(58, 42, 130, 20, Qt::AlignLeft | Qt::AlignVCenter, "SECURITY");
 }
 
 // ── Draw all nav items ──

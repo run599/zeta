@@ -85,9 +85,6 @@ static BOOLEAN CheckSilverFoxPattern(ULONG Pid, PUNICODE_STRING FileName) {
     // Skip system-trusted paths (System32, Program Files, etc.)
     if (IsSignedLocation(FileName)) return FALSE;
 
-    // Learning mode: skip ALL expensive tracking, return immediately
-    if (g_LearningModeActive) return FALSE;
-
     // Non-learning: check whitelist before expensive tracking
     // Cached per PID to avoid expensive PsLookupProcessByProcessId on every call
     {
@@ -262,12 +259,30 @@ FLT_PREOP_CALLBACK_STATUS ProtectFile_PreCreate(PFLT_CALLBACK_DATA Data, PCFLT_R
  return FLT_PREOP_SUCCESS_NO_CALLBACK;
  }
 
- // Learning mode: skip ALL protection for first 5 minutes after boot
- // This prevents false positives during system startup and software installation
+ // Learning mode: don't block anything, but still send events to user-mode
+ // so the EDR engine can build baselines. This is actual "learning" behavior:
+ // we observe what untrusted processes do without interfering.
  if (g_LearningModeActive) {
-     DbgPrint("ZETA: LEARNING MODE - allowing all operations for PID=%lu\n", Pid);
-     // Still run lineage tracker for learning data, but don't block anything
+     DbgPrint("ZETA: LEARNING MODE - observing PID=%lu (no blocking)\n", Pid);
+     // Always run lineage tracker
      LineageTracker_OnFileRelease((ULONG)(ULONG_PTR)Pid, &FileName);
+
+     // In learning mode, we still check trust level and send learning events
+     // to user-mode for EDR baseline building. No blocking, no HIPS prompts.
+     if (trustLevel == TRUST_LEVEL_NONE || trustLevel == TRUST_LEVEL_SIGNED) {
+         // Check protected path rules and send learning event
+         if (CheckProtectedPathRule(&FileName)) {
+             SendMessageToUser(2011, (ULONG)(ULONG_PTR)Pid, FileName.Buffer, FileName.Length);
+         }
+         // Check hidden file (common malware indicator)
+         ULONG cd = (Data->Iopb->Parameters.Create.Options >> 24) & 0xFF;
+         BOOLEAN isCreate = (cd == FILE_CREATE || cd == FILE_SUPERSEDE ||
+                             cd == FILE_OVERWRITE || cd == FILE_OVERWRITE_IF);
+         if (isCreate && (Data->Iopb->Parameters.Create.FileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
+             SendMessageToUser(2012, (ULONG)(ULONG_PTR)Pid, FileName.Buffer, FileName.Length);
+         }
+     }
+
      callbackStatus = FLT_PREOP_SUCCESS_NO_CALLBACK;
      goto cleanup;
  }
@@ -332,31 +347,75 @@ FLT_PREOP_CALLBACK_STATUS ProtectFile_PreCreate(PFLT_CALLBACK_DATA Data, PCFLT_R
                       callbackStatus = FLT_PREOP_COMPLETE;
                       goto cleanup;
                   }
-                  // Other files → pend for HIPS user prompt
-                  // If pend fails (no user-mode client, etc.), allow the operation
-                  // rather than blocking (which would break legitimate software).
-                  // Only .sys files are unconditionally blocked (BYOVD defense).
-                  if (NT_SUCCESS(PendOperation(Data, FltObjects, (ULONG)(ULONG_PTR)Pid, 2001, FileName.Buffer, FileName.Length))) {
-                      SendMessageToUser(2001, (ULONG)(ULONG_PTR)Pid, FileName.Buffer, FileName.Length);
-                      callbackStatus = FLT_PREOP_PENDING;
-                      goto cleanup;
-                  } else {
-                      DbgPrint("ZETA: PendOperation failed - allowing access (no user-mode client)\n");
-                      // Fall through → FLT_PREOP_SUCCESS_NO_CALLBACK
+                  // ── GRADUATED RESPONSE BY FILE TYPE ──
+                  // HIGH risk (PE: .exe/.dll/.ocx/.scr) → HIPS popup
+                  // LOW/MEDIUM risk (.txt/.log/.dat/.tmp etc.) → silent allow + EDR score
+                  if (isUntrusted) {
+                      if (IsPEExtension(&FileName)) {
+                          // HIGH RISK: PE files → HIPS user prompt
+                          if (NT_SUCCESS(PendOperation(Data, FltObjects, (ULONG)(ULONG_PTR)Pid, 2001, FileName.Buffer, FileName.Length))) {
+                              SendMessageToUser(2001, (ULONG)(ULONG_PTR)Pid, FileName.Buffer, FileName.Length);
+                              callbackStatus = FLT_PREOP_PENDING;
+                              goto cleanup;
+                          } else {
+                              DbgPrint("ZETA: PendOperation failed - allowing access (no user-mode client)\n");
+                              // Fall through → FLT_PREOP_SUCCESS_NO_CALLBACK
+                          }
+                      } else {
+                          // LOW/MEDIUM RISK: non-PE files → silent allow + EDR
+                          DbgPrint("ZETA: Allowed non-PE file by PID=%lu: %wZ\n", Pid, &FileName);
+                          SendMessageToUser(2001, (ULONG)(ULONG_PTR)Pid, FileName.Buffer, FileName.Length);
+                          // Fall through → FLT_PREOP_SUCCESS_NO_CALLBACK
+                      }
                   }
               }
   }
   }
   }
 
- // SilverFox: track signature status of released files (monitoring only)
+ // SilverFox: track signature status of released files
+ // CheckSilverFoxPattern returns TRUE when it detects 银狐 pattern:
+ // 3+ PE files released by same untrusted process → should pend & check signature
  if (isUntrusted && IsCreateAction) {
-     BOOLEAN isSigned = CheckSilverFoxPattern((ULONG)(ULONG_PTR)Pid, &FileName);
-     if (isSigned) {
-         DbgPrint("ZETA: SilverFox | PID=%lu has valid signature - skipping detection\n", Pid);
+     BOOLEAN isSilverFox = CheckSilverFoxPattern((ULONG)(ULONG_PTR)Pid, &FileName);
+     if (isSilverFox) {
+         DbgPrint("ZETA: SilverFox | PID=%lu pattern detected, pending operation\n", Pid);
+         if (NT_SUCCESS(PendOperation(Data, FltObjects, (ULONG)(ULONG_PTR)Pid, 2001, FileName.Buffer, FileName.Length))) {
+             SendMessageToUser(2001, (ULONG)(ULONG_PTR)Pid, FileName.Buffer, FileName.Length);
+             callbackStatus = FLT_PREOP_PENDING;
+             goto cleanup;
+         } else {
+             DbgPrint("ZETA: SilverFox | PendOperation failed - allowing access\n", Pid);
+         }
      }
      // Track lineage for all untrusted file creations
      LineageTracker_OnFileRelease((ULONG)(ULONG_PTR)Pid, &FileName);
+
+     // Record PE files for rollback (delete when process exits)
+     if (IsPEExtension(&FileName)) {
+         Rollback_RecordFile((ULONG)(ULONG_PTR)Pid, &FileName);
+     }
+ }
+
+ // ── Global hidden file defense ──
+ // Only PE executables (.exe/.dll/.scr/.ocx) trigger auto-kill when hidden.
+ // Non-PE hidden files (.tmp/.dat/.log/.cfg/.json etc.) are legitimate temp
+ // data created by editors, IDEs, and office apps → allow silently.
+ // Signed software that uses hidden files (e.g. security products) passes the
+ // isUntrusted check and is skipped.
+ if (isUntrusted && IsCreateAction &&
+     (Data->Iopb->Parameters.Create.FileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
+     if (IsPEExtension(&FileName)) {
+         DbgPrint("ZETA: HIDDEN PE FILE - unsigned PID=%lu creating hidden PE: %wZ\n", Pid, &FileName);
+         SendMessageToUser(2002, (ULONG)(ULONG_PTR)Pid, FileName.Buffer, FileName.Length);
+         Data->IoStatus.Status = STATUS_ACCESS_DENIED;
+         Data->IoStatus.Information = 0;
+         callbackStatus = FLT_PREOP_COMPLETE;
+         goto cleanup;
+     } else {
+         // Non-PE hidden file (tmp, dat, etc.) → legitimate app behavior, allow
+         DbgPrint("ZETA: HIDDEN non-PE file - allowing PID=%lu: %wZ\n", Pid, &FileName);
+     }
  }
 
 cleanup:
@@ -364,6 +423,170 @@ cleanup:
  FltReleaseFileNameInformation(nameInfo);
  }
  return callbackStatus;
+}
+
+// ============================================================================
+// Simple File Rollback Tracker
+// Records PE files created by untrusted processes.
+// When the process exits, all recorded files are deleted.
+// ============================================================================
+
+ROLLBACK_TRACKER g_RollbackTrackers[ROLLBACK_MAX_PIDS] = {0};
+KSPIN_LOCK g_RollbackLock = {0};
+
+static ROLLBACK_TRACKER* Rollback_FindOrCreateSlot(ULONG ProcessId) {
+    KIRQL OldIrql;
+    KeAcquireSpinLock(&g_RollbackLock, &OldIrql);
+
+    // Find existing slot for this PID
+    for (ULONG i = 0; i < ROLLBACK_MAX_PIDS; i++) {
+        if (g_RollbackTrackers[i].ProcessId == (LONG)ProcessId) {
+            KeReleaseSpinLock(&g_RollbackLock, OldIrql);
+            return &g_RollbackTrackers[i];
+        }
+    }
+
+    // Find free slot (ProcessId == 0 means free, PID 0 = Idle, never tracked)
+    for (ULONG i = 0; i < ROLLBACK_MAX_PIDS; i++) {
+        if (g_RollbackTrackers[i].ProcessId == 0) {
+            g_RollbackTrackers[i].ProcessId = (LONG)ProcessId;
+            g_RollbackTrackers[i].FileCount = 0;
+            g_RollbackTrackers[i].WasHipsTerminated = FALSE;
+            KeQuerySystemTime(&g_RollbackTrackers[i].StartTime);
+            KeReleaseSpinLock(&g_RollbackLock, OldIrql);
+            return &g_RollbackTrackers[i];
+        }
+    }
+
+    // Overwrite oldest slot if all full
+    ULONG oldest = 0;
+    for (ULONG i = 1; i < ROLLBACK_MAX_PIDS; i++) {
+        if (g_RollbackTrackers[i].StartTime.QuadPart < g_RollbackTrackers[oldest].StartTime.QuadPart) {
+            oldest = i;
+        }
+    }
+    g_RollbackTrackers[oldest].ProcessId = (LONG)ProcessId;
+    g_RollbackTrackers[oldest].FileCount = 0;
+    g_RollbackTrackers[oldest].WasHipsTerminated = FALSE;
+    KeQuerySystemTime(&g_RollbackTrackers[oldest].StartTime);
+    KeReleaseSpinLock(&g_RollbackLock, OldIrql);
+    return &g_RollbackTrackers[oldest];
+}
+
+// Mark a process as terminated by HIPS.
+// Called from user-mode via port message before process termination.
+VOID Rollback_MarkTerminated(ULONG ProcessId) {
+    if (KeGetCurrentIrql() > PASSIVE_LEVEL) return;
+    if (ProcessId == 0) return;
+
+    KIRQL OldIrql;
+    KeAcquireSpinLock(&g_RollbackLock, &OldIrql);
+
+    for (ULONG i = 0; i < ROLLBACK_MAX_PIDS; i++) {
+        if (g_RollbackTrackers[i].ProcessId == (LONG)ProcessId) {
+            g_RollbackTrackers[i].WasHipsTerminated = TRUE;
+            DbgPrint("ZETA: Rollback - marked PID=%lu as HIPS-terminated\n", ProcessId);
+            break;
+        }
+    }
+
+    KeReleaseSpinLock(&g_RollbackLock, OldIrql);
+}
+
+// Record a file path for potential rollback when the process exits.
+// Only PE files from untrusted processes should be recorded.
+VOID Rollback_RecordFile(ULONG ProcessId, PUNICODE_STRING FilePath) {
+    if (!FilePath || !FilePath->Buffer || FilePath->Length == 0) return;
+    if (KeGetCurrentIrql() > PASSIVE_LEVEL) return;
+    if (ProcessId == 0 || ProcessId == 4) return;
+
+    ROLLBACK_TRACKER* tracker = Rollback_FindOrCreateSlot(ProcessId);
+    if (!tracker) return;
+
+    KIRQL OldIrql;
+    KeAcquireSpinLock(&g_RollbackLock, &OldIrql);
+
+    if (tracker->FileCount >= ROLLBACK_MAX_FILES) {
+        KeReleaseSpinLock(&g_RollbackLock, OldIrql);
+        DbgPrint("ZETA: Rollback - PID=%lu file list full (%d)\n", ProcessId, ROLLBACK_MAX_FILES);
+        return;
+    }
+
+    SIZE_T copyLen = FilePath->Length / sizeof(WCHAR);
+    if (copyLen >= MAX_PATH_LEN) copyLen = MAX_PATH_LEN - 1;
+
+    RtlCopyMemory(tracker->Files[tracker->FileCount].Path, FilePath->Buffer, copyLen * sizeof(WCHAR));
+    tracker->Files[tracker->FileCount].Path[copyLen] = L'\0';
+    tracker->FileCount++;
+
+    KeReleaseSpinLock(&g_RollbackLock, OldIrql);
+}
+
+VOID Rollback_Execute(ULONG ProcessId) {
+    if (KeGetCurrentIrql() > PASSIVE_LEVEL) return;
+    if (ProcessId == 0) return;
+
+    KIRQL OldIrql;
+    KeAcquireSpinLock(&g_RollbackLock, &OldIrql);
+
+    ROLLBACK_TRACKER* tracker = NULL;
+    for (ULONG i = 0; i < ROLLBACK_MAX_PIDS; i++) {
+        if (g_RollbackTrackers[i].ProcessId == (LONG)ProcessId) {
+            tracker = &g_RollbackTrackers[i];
+            break;
+        }
+    }
+
+    if (!tracker || tracker->FileCount == 0) {
+        KeReleaseSpinLock(&g_RollbackLock, OldIrql);
+        return;
+    }
+
+    if (!tracker->WasHipsTerminated) {
+        tracker->ProcessId = 0;
+        tracker->FileCount = 0;
+        tracker->WasHipsTerminated = FALSE;
+        RtlZeroMemory(tracker->Files, sizeof(tracker->Files));
+        KeReleaseSpinLock(&g_RollbackLock, OldIrql);
+        DbgPrint("ZETA: Rollback - PID=%lu exited normally\n", ProcessId);
+        return;
+    }
+
+    LONG count = tracker->FileCount;
+
+    WCHAR pathBuf[MAX_PATH_LEN];
+    LONG deleteCount = 0;
+
+    for (LONG i = 0; i < count; i++) {
+        RtlCopyMemory(pathBuf, tracker->Files[i].Path, sizeof(pathBuf));
+        KeReleaseSpinLock(&g_RollbackLock, OldIrql);
+
+        UNICODE_STRING uniPath;
+        RtlInitUnicodeString(&uniPath, pathBuf);
+
+        OBJECT_ATTRIBUTES objAttr;
+        InitializeObjectAttributes(&objAttr, &uniPath, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
+
+        NTSTATUS status = ZwDeleteFile(&objAttr);
+        if (NT_SUCCESS(status)) {
+            deleteCount++;
+        } else if (status == STATUS_SHARING_VIOLATION) {
+            DbgPrint("ZETA: Rollback - sharing violation: %wZ\n", &uniPath);
+        } else if (status != STATUS_OBJECT_NAME_NOT_FOUND && status != STATUS_NO_SUCH_FILE) {
+            DbgPrint("ZETA: Rollback - failed (0x%08X): %wZ\n", status, &uniPath);
+        }
+
+        KeAcquireSpinLock(&g_RollbackLock, &OldIrql);
+    }
+
+    tracker->ProcessId = 0;
+    tracker->FileCount = 0;
+    tracker->WasHipsTerminated = FALSE;
+    RtlZeroMemory(tracker->Files, sizeof(tracker->Files));
+
+    KeReleaseSpinLock(&g_RollbackLock, OldIrql);
+
+    DbgPrint("ZETA: Rollback - PID=%lu HIPS-terminated, deleted %ld of %ld files\n", ProcessId, deleteCount, count);
 }
 
 FLT_PREOP_CALLBACK_STATUS ProtectFile_PreSetInfo(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID* CompletionContext) {

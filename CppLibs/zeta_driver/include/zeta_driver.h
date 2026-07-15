@@ -42,6 +42,7 @@ public:
     // Send allow/deny for pending operation
     bool allowOperation(unsigned long pid);
     bool denyOperation(unsigned long pid);
+    bool markRollback(unsigned long pid);
 
     // Register message handlers
     void registerHandler(unsigned long code, MessageHandler handler);

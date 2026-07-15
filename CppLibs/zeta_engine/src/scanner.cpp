@@ -167,7 +167,6 @@ bool EdrRuleManager::loadFromConfig(const std::wstring& configPath) {
             enabled.enableYara = parseJsonBool(enabledJson, "enable_yara", true);
             enabled.enablePeHeuristics = parseJsonBool(enabledJson, "enable_pe_heuristics", true);
             enabled.enableSignatureCheck = parseJsonBool(enabledJson, "enable_signature_check", true);
-            enabled.enableEntropyAnalysis = parseJsonBool(enabledJson, "enable_entropy_analysis", true);
         }
     }
     

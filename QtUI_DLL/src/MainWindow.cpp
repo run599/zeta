@@ -35,90 +35,100 @@
 
 void MainWindow::initThemes() {
     m_themes["zeta_dark"] = {
-        "#0d0d14",   // bgWindow - 更深的窗口背景
-        "#1a1a2e",   // bgNav - 导航栏背景
-        "#161628",   // bgPanel - 内容面板背景
-        "#25253d",   // bgHover - 悬停背景
-        "#e8e8ee",   // textPrimary - 主文本色
-        "#6c6c8a",   // textSecondary - 次要文本色
-        "#2a2a4a",   // border - 边框色
-        "#0a84ff",   // accent - 强调色
-        "#0066cc",   // accentHover - 强调色悬停
-        "#ff3b30"    // danger - 危险色
+        "#0a0a0f",   // bgWindow - 极深背景，营造沉浸感
+        "#12121f",   // bgNav - 导航栏背景，比窗口略浅
+        "#151525",   // bgPanel - 内容面板背景
+        "#2a2a42",   // bgHover - 悬停背景，适度高亮
+        "#f0f0f5",   // textPrimary - 主文本色，更亮的白色
+        "#7a7a9a",   // textSecondary - 次要文本色，更柔和的灰色
+        "#30304a",   // border - 边框色，更细的分隔
+        "#4f46e5",   // accent - 强调色，紫蓝色，现代感更强
+        "#4338ca",   // accentHover - 强调色悬停
+        "#ef4444"    // danger - 危险色，更鲜艳的红色
     };
 }
 
 QString MainWindow::buildStylesheet(const Theme& t) {
     return QString(R"(
         QMainWindow, QWidget#centralWidget { background-color: %1; }
-        QWidget#navPanel { background-color: %2; border-right: 1px solid %6; }
+        QWidget#navPanel { background-color: %2; border-right: 1px solid rgba(48,48,74,0.5); }
         QWidget#contentPanel { background-color: %3; }
-        QWidget#titleBar { background-color: %2; border-bottom: 1px solid %6; }
-        QWidget#toolbarRow { background-color: %2; border-bottom: 1px solid %6; }
+        QWidget#titleBar { background-color: %2; border-bottom: 1px solid rgba(48,48,74,0.5); }
+        QWidget#toolbarRow { background-color: %2; border-bottom: 1px solid rgba(48,48,74,0.5); }
         QLabel { color: %5; font-size: 15px; }
         QLabel#titleLabel { color: %5; font-size: 16px; font-weight: bold; }
         QLabel#secLabel { color: %6; font-size: 13px; }
-        QLabel#statusTitle { color: %5; font-size: 26px; font-weight: bold; }
+        QLabel#statusTitle { color: %5; font-size: 28px; font-weight: 600; letter-spacing: -0.5px; }
         QPushButton#navBtn {
             background-color: transparent; color: %6; border: none;
             padding: 14px 18px; text-align: left; font-size: 15px;
-            border-radius: 8px; margin: 2px 8px;
+            border-radius: 10px; margin: 2px 8px;
         }
         QPushButton#navBtn:hover { background-color: %4; color: %5; }
-        QPushButton#navBtn:checked { background-color: rgba(10,132,255,0.2); color: %7; font-weight: bold; }
+        QPushButton#navBtn:checked { background-color: rgba(79,70,229,0.15); color: %7; font-weight: 600; }
         QPushButton#ctrlBtn {
             background-color: transparent; color: %6; border: none;
-            padding: 8px 14px; border-radius: 4px; font-size: 18px;
+            padding: 8px 14px; border-radius: 6px; font-size: 18px;
         }
         QPushButton#ctrlBtn:hover { background-color: %4; color: %5; }
         QPushButton#actionBtn {
-            background-color: %7; color: white; border: none;
-            padding: 10px 24px; border-radius: 8px; font-size: 15px;
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0, %7, stop:1, %8);
+            color: white; border: none;
+            padding: 10px 28px; border-radius: 10px; font-size: 15px; font-weight: 600;
         }
-        QPushButton#actionBtn:hover { background-color: %8; }
-        QPushButton#actionBtn[danger="true"] { background-color: %9; }
-        QTextEdit { background-color: %3; color: %5; border: 1px solid %6; border-radius: 8px; padding: 10px; font-size: 13px; }
-        QTableWidget { background-color: %3; color: %5; border: 1px solid %6; border-radius: 8px; gridline-color: rgba(42,42,74,0.6); }
-        QTableWidget::item { padding: 10px; }
-        QTableWidget::item:selected { background-color: rgba(10,132,255,0.2); color: %7; }
-        QHeaderView::section { background-color: rgba(26,26,46,0.8); color: %6; border: none; border-bottom: 1px solid %6; padding: 12px; font-weight: bold; }
+        QPushButton#actionBtn:hover { 
+        }
+        QPushButton#actionBtn:pressed { }
+        QPushButton#actionBtn[danger="true"] { 
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0, %9, stop:1, #dc2626);
+        }
+        QPushButton#actionBtn[danger="true"]:hover { }
+        QTextEdit { background-color: rgba(21,21,37,0.8); color: %5; border: 1px solid rgba(48,48,74,0.5); border-radius: 12px; padding: 12px; font-size: 13px; }
+        QTableWidget { background-color: rgba(21,21,37,0.6); color: %5; border: 1px solid rgba(48,48,74,0.4); border-radius: 12px; gridline-color: rgba(48,48,74,0.3); }
+        QTableWidget::item { padding: 12px; }
+        QTableWidget::item:selected { background-color: rgba(79,70,229,0.15); color: %7; }
+        QHeaderView::section { background-color: rgba(18,18,31,0.9); color: %6; border: none; border-bottom: 1px solid rgba(48,48,74,0.4); padding: 14px; font-weight: 600; }
         QCheckBox { color: %5; font-size: 16px; spacing: 12px; }
-        QCheckBox::indicator { width: 20px; height: 20px; border-radius: 4px; border: 2px solid %6; }
+        QCheckBox::indicator { width: 22px; height: 22px; border-radius: 6px; border: 2px solid %6; }
         QCheckBox::indicator:checked { background-color: %7; border-color: %7; }
-        QComboBox { background-color: %3; color: %5; border: 1px solid %6; border-radius: 8px; padding: 8px 14px; font-size: 15px; }
+        QComboBox { background-color: rgba(21,21,37,0.8); color: %5; border: 1px solid rgba(48,48,74,0.5); border-radius: 10px; padding: 10px 16px; font-size: 15px; }
         QComboBox:hover { border-color: %7; }
-        QComboBox QAbstractItemView { background-color: %3; color: %5; border: 1px solid %6; border-radius: 4px; selection-background-color: rgba(10,132,255,0.2); selection-color: %7; }
-        QProgressBar { background-color: rgba(42,42,74,0.4); border: none; border-radius: 4px; height: 10px; text-align: center; }
-        QProgressBar::chunk { background-color: %7; border-radius: 4px; }
-        QGroupBox { color: %5; font-size: 16px; font-weight: bold; border: 1px solid %6; border-radius: 10px; margin-top: 10px; padding-top: 0px; }
+        QComboBox QAbstractItemView { background-color: rgba(18,18,31,0.95); color: %5; border: 1px solid rgba(48,48,74,0.5); border-radius: 8px; selection-background-color: rgba(79,70,229,0.15); selection-color: %7; }
+        QProgressBar { background-color: rgba(48,48,74,0.3); border: none; border-radius: 6px; height: 12px; text-align: center; }
+        QProgressBar::chunk { background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0, %7, stop:1, #818cf8); border-radius: 6px; }
+        QGroupBox { color: %5; font-size: 16px; font-weight: 600; border: 1px solid rgba(48,48,74,0.4); border-radius: 12px; margin-top: 12px; padding-top: 0px; }
         QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 4px 16px; background-color: %3; }
         QGroupBox#configGroup { 
-            background-color: rgba(22,22,40,0.6); 
-            border: 1px solid rgba(42,42,74,0.5);
-            border-radius: 12px;
+            background-color: rgba(18,18,31,0.7); 
+            border: 1px solid rgba(48,48,74,0.3);
+            border-radius: 14px;
         }
         QScrollArea { background-color: transparent; border: none; }
         QScrollArea QWidget { background-color: transparent; }
-        QScrollBar:vertical { background-color: %3; width: 10px; border-radius: 4px; }
-        QScrollBar::handle:vertical { background-color: rgba(42,42,74,0.8); border-radius: 4px; min-height: 36px; }
-        QFrame#listItem { background-color: transparent; border: none; border-bottom: 1px solid rgba(42,42,74,0.3); min-height: 64px; }
-        QFrame#listItem:hover { background-color: %4; }
+        QScrollBar:vertical { background-color: %3; width: 8px; border-radius: 4px; }
+        QScrollBar::handle:vertical { background-color: rgba(74,74,102,0.6); border-radius: 4px; min-height: 40px; }
+        QScrollBar::handle:vertical:hover { background-color: rgba(94,94,122,0.8); }
+        QFrame#listItem { background-color: transparent; border: none; border-bottom: 1px solid rgba(48,48,74,0.2); min-height: 68px; border-radius: 10px; margin: 4px 0; }
+        QFrame#listItem:hover { background-color: %4; margin: 4px; }
         QFrame#dashCard { 
-            background-color: rgba(22,22,40,0.8); 
-            border: 1px solid rgba(42,42,74,0.4); 
-            border-radius: 12px; 
-            padding: 20px;
-            border-top: 1px solid rgba(255,255,255,0.04);
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0, rgba(30,30,52,0.9), stop:1, rgba(22,22,38,0.8)); 
+            border: 1px solid rgba(48,48,74,0.3); 
+            border-radius: 16px; 
+            padding: 24px;
+            border-top: 1px solid rgba(255,255,255,0.06);
         }
-        QLabel#cardTitle { color: %6; font-size: 12px; font-weight: bold; letter-spacing: 1.5px; text-transform: uppercase; }
+        QFrame#dashCard:hover { 
+            border-color: rgba(79,70,229,0.3);
+        }
+        QLabel#cardTitle { color: %6; font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
         QLabel#cardValue { color: %5; font-size: 15px; }
         QLabel#cardAccent { color: %7; font-size: 15px; }
         QLabel#cardDanger { color: %9; font-size: 15px; }
-        QLabel#cardEvent { color: rgba(118,118,146,0.9); font-size: 12px; padding: 4px 0px; border: none; }
-        QLineEdit { background-color: %3; color: %5; border: 1px solid %6; border-radius: 8px; padding: 10px 14px; font-size: 15px; }
+        QLabel#cardEvent { color: rgba(122,122,154,0.85); font-size: 12px; padding: 4px 0px; border: none; }
+        QLineEdit { background-color: rgba(21,21,37,0.8); color: %5; border: 1px solid rgba(48,48,74,0.5); border-radius: 10px; padding: 12px 16px; font-size: 15px; }
         QLineEdit:hover { border-color: %7; }
         QLineEdit:focus { border-color: %7; }
-        QSpinBox { background-color: %3; color: %5; border: 1px solid %6; border-radius: 8px; padding: 6px 10px; font-size: 16px; }
+        QSpinBox { background-color: rgba(21,21,37,0.8); color: %5; border: 1px solid rgba(48,48,74,0.5); border-radius: 10px; padding: 8px 12px; font-size: 16px; }
         QSpinBox:hover { border-color: %7; }
         QSpinBox:focus { border-color: %7; }
         QTabWidget::pane { border: none; background-color: %3; }
@@ -126,14 +136,14 @@ QString MainWindow::buildStylesheet(const Theme& t) {
         QTabBar::tab { 
             background-color: transparent; 
             color: %6; 
-            padding: 12px 24px; 
+            padding: 12px 28px; 
             margin-right: 4px; 
-            border-radius: 8px 8px 0 0; 
+            border-radius: 10px 10px 0 0; 
             font-size: 15px;
-            min-width: 90px;
+            min-width: 100px;
         }
         QTabBar::tab:hover { background-color: %4; color: %5; }
-        QTabBar::tab:selected { background-color: %3; color: %5; font-weight: bold; }
+        QTabBar::tab:selected { background-color: %3; color: %5; font-weight: 600; }
     )")
     .arg(t.bgWindow).arg(t.bgNav).arg(t.bgPanel).arg(t.bgHover)
     .arg(t.textPrimary).arg(t.textSecondary)
@@ -256,15 +266,15 @@ void MainWindow::setupPages() {
         m_homePage = new QWidget();
         m_homePage->setObjectName("contentPanel");
         auto* l = new QVBoxLayout(m_homePage);
-        l->setContentsMargins(20, 18, 20, 18);
-        l->setSpacing(16);
+        l->setContentsMargins(28, 24, 28, 24);
+        l->setSpacing(20);
 
         auto makeCard = [&](const QString& title, bool hasShadow = true) -> QPair<QFrame*, QVBoxLayout*> {
             auto* card = new QFrame();
             card->setObjectName("dashCard");
             auto* cl = new QVBoxLayout(card);
-            cl->setContentsMargins(14, 12, 14, 12);
-            cl->setSpacing(8);
+            cl->setContentsMargins(20, 18, 20, 18);
+            cl->setSpacing(10);
             if (!title.isEmpty()) {
                 auto* titleL = new QLabel(title);
                 titleL->setObjectName("cardTitle");
@@ -272,9 +282,9 @@ void MainWindow::setupPages() {
             }
             if (hasShadow) {
                 auto* shadow = new QGraphicsDropShadowEffect();
-                shadow->setBlurRadius(16);
-                shadow->setOffset(0, 3);
-                shadow->setColor(QColor(0, 0, 0, 80));
+                shadow->setBlurRadius(20);
+                shadow->setOffset(0, 6);
+                shadow->setColor(QColor(0, 0, 0, 100));
                 card->setGraphicsEffect(shadow);
             }
             return {card, cl};
@@ -284,42 +294,51 @@ void MainWindow::setupPages() {
         auto [mainCard, mc] = makeCard("");
         {
             auto* topRow = new QHBoxLayout();
-            topRow->setSpacing(20);
+            topRow->setSpacing(32);
 
             auto* statusCol = new QVBoxLayout();
-            statusCol->setSpacing(4);
+            statusCol->setSpacing(6);
             m_statusIcon = new QLabel();
-            m_statusIcon->setFixedSize(36, 36);
-            m_statusIcon->setStyleSheet("background-color: #34c759; border-radius: 9px;");
+            m_statusIcon->setFixedSize(44, 44);
+            m_statusIcon->setStyleSheet("background-color: #22c55e; border-radius: 12px;");
             statusCol->addWidget(m_statusIcon, 0, Qt::AlignTop);
             m_statusText = new QLabel("已防护");
             m_statusText->setObjectName("cardAccent");
-            m_statusText->setStyleSheet("QLabel#cardAccent { font-size: 15px; font-weight: bold; }");
+            m_statusText->setStyleSheet("QLabel#cardAccent { font-size: 18px; font-weight: 700; }");
             statusCol->addWidget(m_statusText);
             m_statusSub = new QLabel("实时防护中");
             m_statusSub->setObjectName("cardValue");
+            m_statusSub->setStyleSheet("QLabel#cardValue { font-size: 13px; color: #7a7a9a; }");
             statusCol->addWidget(m_statusSub);
             topRow->addLayout(statusCol);
 
             auto* statsCol = new QVBoxLayout();
-            statsCol->setSpacing(6);
+            statsCol->setSpacing(0);
             auto makeStat = [&](const QString& label, QLabel*& val, const QString& obj) -> QHBoxLayout* {
                 auto* r = new QHBoxLayout();
                 r->setContentsMargins(0, 0, 0, 0);
+                r->setSpacing(8);
                 auto* labelL = new QLabel(label);
                 labelL->setObjectName("cardValue");
-                labelL->setStyleSheet("QLabel#cardValue { font-size: 12px; color: #6c6c8a; }");
+                labelL->setStyleSheet("QLabel#cardValue { font-size: 13px; color: #7a7a9a; }");
                 r->addWidget(labelL);
                 r->addStretch();
                 val = new QLabel("0");
                 val->setObjectName(obj);
-                val->setStyleSheet("font-weight: bold; font-size: 13px;");
+                val->setStyleSheet("font-weight: 700; font-size: 16px;");
                 r->addWidget(val);
                 return r;
             };
-            statsCol->addLayout(makeStat("HIPS 拦截", m_statHipsLabel, "cardAccent"));
-            statsCol->addLayout(makeStat("EDR 告警", m_statEdrLabel, "cardAccent"));
-            statsCol->addLayout(makeStat("威胁阻断", m_statKilledLabel, "cardDanger"));
+            auto* statRow1 = new QHBoxLayout();
+            statRow1->setSpacing(40);
+            statRow1->addLayout(makeStat("HIPS 拦截", m_statHipsLabel, "cardAccent"));
+            statRow1->addLayout(makeStat("EDR 告警", m_statEdrLabel, "cardAccent"));
+            auto* statRow2 = new QHBoxLayout();
+            statRow2->setSpacing(40);
+            statRow2->addLayout(makeStat("威胁阻断", m_statKilledLabel, "cardDanger"));
+            statsCol->addLayout(statRow1);
+            statsCol->addSpacing(12);
+            statsCol->addLayout(statRow2);
             topRow->addLayout(statsCol, 1);
 
             mc->addLayout(topRow);
@@ -327,7 +346,7 @@ void MainWindow::setupPages() {
 
         // ── Row 2: 最近事件 + 日志 ──
         auto* bottomRow = new QHBoxLayout();
-        bottomRow->setSpacing(16);
+        bottomRow->setSpacing(20);
 
         // ── Card 3: 最近事件 ──
         auto [eventCard, ec] = makeCard("最 近 事 件");
@@ -335,7 +354,7 @@ void MainWindow::setupPages() {
             auto makeEvent = [&](QLabel*& lbl) {
                 lbl = new QLabel("—");
                 lbl->setObjectName("cardEvent");
-                lbl->setStyleSheet("QLabel#cardEvent { font-size: 11px; padding: 3px 0; }");
+                lbl->setStyleSheet("QLabel#cardEvent { font-size: 12px; padding: 5px 0; }");
                 ec->addWidget(lbl);
             };
             makeEvent(m_statEvent1);
@@ -352,8 +371,8 @@ void MainWindow::setupPages() {
             m_logText = new QTextEdit();
             m_logText->setReadOnly(true);
             m_logText->setPlaceholderText("等待防护日志...");
-            m_logText->setMaximumHeight(140);
-            m_logText->setStyleSheet("QTextEdit { background: transparent; border: none; font-size: 11px; }");
+            m_logText->setMaximumHeight(160);
+            m_logText->setStyleSheet("QTextEdit { background: transparent; border: none; font-size: 12px; }");
             ll->addWidget(m_logText, 1);
         }
         bottomRow->addWidget(logCard, 2);
@@ -377,13 +396,13 @@ void MainWindow::setupPages() {
         m_protectPage = new QWidget();
         m_protectPage->setObjectName("contentPanel");
         auto* l = new QVBoxLayout(m_protectPage);
-        l->setContentsMargins(24, 24, 24, 24);
-        l->setSpacing(8);
+        l->setContentsMargins(28, 28, 28, 28);
+        l->setSpacing(16);
 
         auto* hdr = new QLabel("防护状态");
         hdr->setObjectName("statusTitle");
         l->addWidget(hdr);
-        l->addSpacing(8);
+        l->addSpacing(16);
 
         struct { const char* title; const char* desc; } items[] = {
             {"HIPS拦截", "实时拦截高危系统操作"},
@@ -398,11 +417,11 @@ void MainWindow::setupPages() {
             frame->setObjectName("listItem");
             frame->setFrameShape(QFrame::NoFrame);
             auto* fl = new QHBoxLayout(frame);
-            fl->setContentsMargins(16, 14, 16, 14);
-            fl->setSpacing(12);
+            fl->setContentsMargins(20, 16, 20, 16);
+            fl->setSpacing(16);
 
             auto* tl = new QVBoxLayout();
-            tl->setSpacing(2);
+            tl->setSpacing(4);
             auto* t = new QLabel(item.title);
             t->setObjectName("titleLabel");
             auto* d = new QLabel(item.desc);
@@ -412,7 +431,8 @@ void MainWindow::setupPages() {
             fl->addLayout(tl, 1);
 
             auto* status = new QLabel("运行中");
-            status->setObjectName("statusLabel");
+            status->setObjectName("cardAccent");
+            status->setStyleSheet("QLabel#cardAccent { font-size: 13px; color: #22c55e; font-weight: 600; }");
             fl->addWidget(status);
 
             l->addWidget(frame);
@@ -426,13 +446,13 @@ void MainWindow::setupPages() {
         m_settingsPage = new QWidget();
         m_settingsPage->setObjectName("contentPanel");
         auto* l = new QVBoxLayout(m_settingsPage);
-        l->setContentsMargins(24, 24, 24, 24);
-        l->setSpacing(8);
+        l->setContentsMargins(28, 28, 28, 28);
+        l->setSpacing(16);
 
         auto* hdr = new QLabel("设置");
         hdr->setObjectName("statusTitle");
         l->addWidget(hdr);
-        l->addSpacing(8);
+        l->addSpacing(16);
 
         // Helper to create toggle rows
         auto makeToggle = [&](const char* title, const char* desc) -> QPair<QFrame*, QCheckBox*> {
@@ -440,10 +460,10 @@ void MainWindow::setupPages() {
             frame->setObjectName("listItem");
             frame->setFrameShape(QFrame::NoFrame);
             auto* fl = new QHBoxLayout(frame);
-            fl->setContentsMargins(16, 14, 16, 14);
-            fl->setSpacing(12);
+            fl->setContentsMargins(20, 16, 20, 16);
+            fl->setSpacing(16);
             auto* tl = new QVBoxLayout();
-            tl->setSpacing(2);
+            tl->setSpacing(4);
             auto* t = new QLabel(title);
             t->setObjectName("titleLabel");
             auto* d = new QLabel(desc);
@@ -456,29 +476,14 @@ void MainWindow::setupPages() {
             return {frame, sw};
         };
 
-        // Experimental group
-        auto* expGroup = new QGroupBox("实验性功能");
-        auto* expL = new QVBoxLayout(expGroup);
-
-        auto [lf1, sw1] = makeToggle("血统追踪", "追踪进程血缘关系，检测脚本解释器释放恶意文件");
-        m_lineageSwitch = sw1;
-        expL->addWidget(lf1);
-        connect(m_lineageSwitch, &QCheckBox::toggled, this, [this](bool checked) {
-            Bridge::instance()->invokeToolCallback(checked ? QStringLiteral("toggle_lineage:1") : QStringLiteral("toggle_lineage:0"));
-        });
-
-        auto [lf2, sw2] = makeToggle("实验性勒索检测", "使用高级熵分析检测勒索软件行为");
-        m_ransomSwitch = sw2;
-        expL->addWidget(lf2);
-        connect(m_ransomSwitch, &QCheckBox::toggled, this, [this](bool checked) {
-            Bridge::instance()->invokeToolCallback(checked ? QStringLiteral("toggle_ransom:1") : QStringLiteral("toggle_ransom:0"));
-        });
-        l->addWidget(expGroup);
 
 
         // General group
         auto* genGroup = new QGroupBox("常规设置");
+        genGroup->setObjectName("configGroup");
         auto* genL = new QVBoxLayout(genGroup);
+        genL->setSpacing(4);
+        genL->setContentsMargins(16, 16, 16, 16);
 
         auto [gf1, gs1] = makeToggle("学习模式", "启动后5分钟内自动放行所有可疑行为并记录日志");
         m_learningSwitch = gs1; genL->addWidget(gf1);
@@ -536,9 +541,7 @@ void MainWindow::onAppendLog(const QString& level, const QString& action, const 
         m_logText->ensureCursorVisible();
     }
     // Sync to dashboard
-    QString shortLine = QString("[%1] [%2] %3").arg(
-        QDateTime::currentDateTime().toString("HH:mm"), level, action);
-    onUpdateDashboardStats(shortLine);
+    onUpdateDashboardStats(level, action, detail);
 }
 
 void MainWindow::onSetTheme(const QString& themeKey) { applyTheme(themeKey); }
@@ -552,15 +555,15 @@ void MainWindow::onSetDriverStatus(bool loaded) {
     }
     if (m_statusIcon) {
         m_statusIcon->setStyleSheet(loaded 
-            ? "background-color: #34c759; border-radius: 9px;" 
-            : "background-color: #ff3b30; border-radius: 9px;");
+            ? "background-color: #22c55e; border-radius: 12px;" 
+            : "background-color: #ef4444; border-radius: 12px;");
     }
     if (m_statusText) {
         if (loaded) {
-            m_statusText->setStyleSheet("QLabel#cardAccent { font-size: 15px; font-weight: bold; color: #34c759; }");
+            m_statusText->setStyleSheet("QLabel#cardAccent { font-size: 18px; font-weight: 700; color: #22c55e; }");
             m_statusText->setText("已防护");
         } else {
-            m_statusText->setStyleSheet("QLabel#cardDanger { font-size: 15px; font-weight: bold; color: #ff3b30; }");
+            m_statusText->setStyleSheet("QLabel#cardDanger { font-size: 18px; font-weight: 700; color: #ef4444; }");
             m_statusText->setText("未防护");
         }
     }
@@ -576,22 +579,6 @@ void MainWindow::onSetDriverStatus(bool loaded) {
     }
 }
 
-void MainWindow::onSetLineageTracker(bool enabled) {
-    if (m_lineageSwitch) {
-        m_lineageSwitch->blockSignals(true);
-        m_lineageSwitch->setChecked(enabled);
-        m_lineageSwitch->blockSignals(false);
-    }
-}
-
-void MainWindow::onSetRansomExp(bool enabled) {
-    if (m_ransomSwitch) {
-        m_ransomSwitch->blockSignals(true);
-        m_ransomSwitch->setChecked(enabled);
-        m_ransomSwitch->blockSignals(false);
-    }
-}
-
 void MainWindow::onSetStatusText(const QString& text) {
     if (m_statusSub) m_statusSub->setText(text);
     if (m_logText) {
@@ -602,11 +589,7 @@ void MainWindow::onSetStatusText(const QString& text) {
 
 
 void MainWindow::onRestoreSwitch(const QString& key, bool checked) {
-    if (key.startsWith("lineage") && m_lineageSwitch) {
-        m_lineageSwitch->blockSignals(true); m_lineageSwitch->setChecked(checked); m_lineageSwitch->blockSignals(false);
-    } else if (key.startsWith("ransom") && m_ransomSwitch) {
-        m_ransomSwitch->blockSignals(true); m_ransomSwitch->setChecked(checked); m_ransomSwitch->blockSignals(false);
-    }
+    // placeholder for future switch restore
 }
 
 void MainWindow::onRestoreCombo(const QString& name, const QString& value) {
@@ -630,6 +613,11 @@ void MainWindow::onSetRepairButtons(bool enabled) {
     }
 }
 
+void MainWindow::onSetRulesPath(const QString& path) {
+    m_rulesPath = path;
+    onRefreshHipsRules();
+}
+
 void MainWindow::onShowNotification(const QString& title, const QString& message, int level) {
     NotificationDialog::showNotification(title, message, 
         static_cast<NotificationDialog::Level>(level));
@@ -644,24 +632,28 @@ void MainWindow::onShowHipsPrompt(const QString& title, const QString& message, 
         actionCb, static_cast<NotificationDialog::Level>(level));
 }
 
-void MainWindow::onUpdateDashboardStats(const QString& eventLine) {
+void MainWindow::onUpdateDashboardStats(const QString& level, const QString& action, const QString& detail) {
     // Update event list (shift events down, newest at top)
+    QString shortLine = QString("[%1] [%2] %3").arg(
+        QDateTime::currentDateTime().toString("HH:mm"), level, action);
     if (m_statEvent5) m_statEvent5->setText(m_statEvent4->text());
     if (m_statEvent4) m_statEvent4->setText(m_statEvent3->text());
     if (m_statEvent3) m_statEvent3->setText(m_statEvent2->text());
     if (m_statEvent2) m_statEvent2->setText(m_statEvent1->text());
-    if (m_statEvent1) m_statEvent1->setText(eventLine);
+    if (m_statEvent1) m_statEvent1->setText(shortLine);
 
     // Parse and update stats counts
-    if (eventLine.contains("[HIPS]")) {
+    if (action == "HIPS" || action == "hips") {
         m_statHipsCount++;
         if (m_statHipsLabel) m_statHipsLabel->setText(QString::number(m_statHipsCount));
-    } else if (eventLine.contains("[EDR]") && eventLine.contains("kill")) {
-        m_statKilledCount++;
-        if (m_statKilledLabel) m_statKilledLabel->setText(QString::number(m_statKilledCount));
-    } else if (eventLine.contains("[EDR]")) {
+    } else if (action == "EDR" || action == "edr") {
         m_statEdrCount++;
         if (m_statEdrLabel) m_statEdrLabel->setText(QString::number(m_statEdrCount));
+        // "威胁阻断" — EDR 自动终止或已终止进程
+        if (detail.contains("自动终止") || detail.contains("已终止") || detail.contains("auto-kill")) {
+            m_statKilledCount++;
+            if (m_statKilledLabel) m_statKilledLabel->setText(QString::number(m_statKilledCount));
+        }
     }
 }
 
@@ -669,8 +661,8 @@ void MainWindow::onUpdateDashboardStats(const QString& eventLine) {
 
 void MainWindow::setupToolsPage() {
     auto* l = new QVBoxLayout(m_toolsPage);
-    l->setContentsMargins(24, 24, 24, 24);
-    l->setSpacing(12);
+    l->setContentsMargins(28, 28, 28, 28);
+    l->setSpacing(16);
 
     // Top bar with back button and title
     auto* topBar = new QHBoxLayout();
@@ -696,7 +688,7 @@ void MainWindow::setupToolsPage() {
     listPage->setObjectName("contentPanel");
     auto* listL = new QVBoxLayout(listPage);
     listL->setContentsMargins(0, 0, 0, 0);
-    listL->setSpacing(8);
+    listL->setSpacing(4);
 
     const char* tools[] = {"进程管理", "启动项管理", "垃圾清理", "系统修复",
                            "HIPS 规则管理", "白名单", "隔离区", "EDR 规则管理"};
@@ -711,11 +703,11 @@ void MainWindow::setupToolsPage() {
         frame->setFrameShape(QFrame::NoFrame);
         frame->setCursor(Qt::PointingHandCursor);
         auto* fl = new QHBoxLayout(frame);
-        fl->setContentsMargins(16, 14, 16, 14);
-        fl->setSpacing(12);
+        fl->setContentsMargins(20, 16, 20, 16);
+        fl->setSpacing(16);
 
         auto* tl = new QVBoxLayout();
-        tl->setSpacing(2);
+        tl->setSpacing(4);
         auto* t = new QLabel(tools[i]);
         t->setObjectName("titleLabel");
         t->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -729,6 +721,7 @@ void MainWindow::setupToolsPage() {
         arrow->setObjectName("cardAccent");
         arrow->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         arrow->setAttribute(Qt::WA_TransparentForMouseEvents);
+        arrow->setStyleSheet("font-size: 20px;");
         fl->addWidget(arrow);
 
         int idx = i + 1; // page index (1-based for tool pages)
@@ -1136,6 +1129,17 @@ void MainWindow::setupHipsManager(QWidget* page) {
     connect(refreshBtn, &QPushButton::clicked, this, &MainWindow::onRefreshHipsRules);
     ctrl->addWidget(refreshBtn);
 
+    auto* editHipsBtn = new QPushButton("编辑 HIPS 规则");
+    editHipsBtn->setObjectName("actionBtn");
+    editHipsBtn->setCursor(Qt::PointingHandCursor);
+    connect(editHipsBtn, &QPushButton::clicked, this, [this]() {
+        QString path = m_rulesPath;
+        if (path.isEmpty())
+            path = QCoreApplication::applicationDirPath() + "/Plugins/Rules/Rules_Hips.json";
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    });
+    ctrl->addWidget(editHipsBtn);
+
     auto* editUserBtn = new QPushButton("编辑自定义规则");
     editUserBtn->setObjectName("actionBtn");
     editUserBtn->setCursor(Qt::PointingHandCursor);
@@ -1148,16 +1152,19 @@ void MainWindow::setupHipsManager(QWidget* page) {
     ctrl->addStretch();
     l->addLayout(ctrl);
 
-    auto* infoLabel = new QLabel("HIPS 规则通过驱动加载。当前显示默认规则。");
+    auto* infoLabel = new QLabel("实时 HIPS 规则列表（从 Rules_Hips.json 加载）。勾选 = 启用，取消勾选 = 禁用。重启后生效。");
     infoLabel->setObjectName("secLabel");
     infoLabel->setWordWrap(true);
     l->addWidget(infoLabel);
 
     m_hipsTable = new QTableWidget();
-    m_hipsTable->setColumnCount(4);
-    m_hipsTable->setHorizontalHeaderLabels({"规则名", "类型", "操作", "状态"});
-    m_hipsTable->horizontalHeader()->setStretchLastSection(true);
-    m_hipsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    m_hipsTable->setColumnCount(5);
+    m_hipsTable->setHorizontalHeaderLabels({"规则ID", "类型", "进程/路径", "分值", "启用"});
+    m_hipsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_hipsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_hipsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    m_hipsTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_hipsTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_hipsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_hipsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_hipsTable->verticalHeader()->setVisible(false);
@@ -1167,81 +1174,124 @@ void MainWindow::setupHipsManager(QWidget* page) {
 void MainWindow::onRefreshHipsRules() {
     if (!m_hipsTable) return;
     m_hipsTable->setRowCount(0);
+    m_rules.clear();
 
-    struct { const char* name; const char* type; const char* action; const char* status; } rules[] = {
-        // ── 进程保护 ──
-        {"LSASS 进程保护", "进程保护", "拦截", "启用"},
-        {"SVCHOST 进程保护", "进程保护", "拦截", "启用"},
-        {"EXPLORER 进程保护", "进程保护", "拦截", "启用"},
-        {"系统关键进程保护", "进程保护", "拦截", "启用"},
-        {"恶意进程终止", "进程保护", "拦截", "启用"},
-        {"进程注入检测", "进程保护", "告警", "启用"},
-        {"父进程欺骗检测", "进程保护", "告警", "启用"},
-        {"空洞进程 (Process Hollowing)", "进程保护", "拦截", "启用"},
-        {"反射型 DLL 注入", "进程保护", "拦截", "启用"},
-
-        // ── 注册表保护 ──
-        {"启动项注册表防护", "注册表保护", "拦截", "启用"},
-        {"镜像劫持 (IFEO) 防护", "注册表保护", "拦截", "启用"},
-        {"AppInit_DLLs 防护", "注册表保护", "拦截", "启用"},
-        {"UAC 设置防护", "注册表保护", "拦截", "启用"},
-        {"安全中心禁用防护", "注册表保护", "拦截", "启用"},
-        {"Windows Defender 防护", "注册表保护", "拦截", "启用"},
-        {"PowerShell 日志防护", "注册表保护", "拦截", "启用"},
-        {"防火墙设置防护", "注册表保护", "拦截", "启用"},
-        {"BCD 启动项防护", "注册表保护", "拦截", "启用"},
-        {"自动登录配置防护", "注册表保护", "拦截", "启用"},
-
-        // ── 文件保护 ──
-        {"系统目录文件防护", "文件保护", "拦截", "启用"},
-        {"驱动文件保护", "文件保护", "拦截", "启用"},
-        {"配置文件保护", "文件保护", "拦截", "启用"},
-        {"引导分区保护 (EFI/MBR)", "文件保护", "拦截", "启用"},
-        {"SAM/SYSTEM 配置保护", "文件保护", "拦截", "启用"},
-        {"Temp 目录可执行文件创建", "文件保护", "告警", "启用"},
-        {"脚本解释器文件创建", "文件保护", "告警", "启用"},
-        {"ZETA 自身文件保护", "文件保护", "拦截", "启用"},
-
-        // ── 网络保护 ──
-        {"可疑网络连接监控", "网络保护", "告警", "启用"},
-        {"C2 通信检测", "网络保护", "拦截", "启用"},
-        {"DNS 劫持检测", "网络保护", "告警", "启用"},
-        {"代理配置篡改防护", "网络保护", "拦截", "启用"},
-        {"Hosts 文件保护", "文件保护", "拦截", "启用"},
-
-        // ── 驱动保护 ──
-        {"驱动加载保护", "驱动保护", "拦截", "启用"},
-        {"未知驱动拦截", "驱动保护", "告警", "启用"},
-        {"驱动签名验证", "驱动保护", "拦截", "启用"},
-        {"内核回调保护", "驱动保护", "拦截", "启用"},
-
-        // ── 启动项保护 ──
-        {"Run 键启动项防护", "启动项保护", "拦截", "启用"},
-        {"RunOnce 启动项防护", "启动项保护", "拦截", "启用"},
-        {"计划任务防护", "启动项保护", "拦截", "启用"},
-        {"服务启动防护", "启动项保护", "拦截", "启用"},
-        {"WMI 事件订阅防护", "启动项保护", "告警", "启用"},
-
-        // ── 行为检测 ──
-        {"勒索软件行为检测", "行为检测", "拦截", "启用"},
-        {"SilverFox 双签名检测", "行为检测", "告警", "启用"},
-        {"血缘追踪 (Lineage)", "行为检测", "告警", "启用"},
-        {"LOLBins 滥用检测", "行为检测", "告警", "启用"},
-        {"UAC 绕过检测", "行为检测", "拦截", "启用"},
-        {"凭证窃取检测", "行为检测", "拦截", "启用"},
-        {"横向移动检测", "行为检测", "告警", "启用"},
-    };
-    for (auto& r : rules) {
-        int row = m_hipsTable->rowCount();
-        m_hipsTable->insertRow(row);
-        m_hipsTable->setItem(row, 0, new QTableWidgetItem(r.name));
-        m_hipsTable->setItem(row, 1, new QTableWidgetItem(r.type));
-        m_hipsTable->setItem(row, 2, new QTableWidgetItem(r.action));
-        m_hipsTable->setItem(row, 3, new QTableWidgetItem(r.status));
+    // Read rules from JSON file
+    QString path = m_rulesPath;
+    if (path.isEmpty()) {
+        path = QCoreApplication::applicationDirPath() + "/Plugins/Rules/Rules_Hips.json";
     }
 
-    // Try to load from backend if available
-    Bridge::instance()->invokeToolCallback("HIPS 规则管理");
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        // Fallback: show message when file can't be read
+        m_hipsTable->insertRow(0);
+        m_hipsTable->setItem(0, 0, new QTableWidgetItem("无法加载规则文件: " + path));
+        return;
+    }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    QJsonParseError parseErr;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
+    if (parseErr.error != QJsonParseError::NoError) {
+        m_hipsTable->insertRow(0);
+        m_hipsTable->setItem(0, 0, new QTableWidgetItem("JSON 解析错误: " + parseErr.errorString()));
+        return;
+    }
+
+    QJsonArray rules = doc.object()["rules"].toArray();
+    if (rules.isEmpty()) {
+        m_hipsTable->insertRow(0);
+        m_hipsTable->setItem(0, 0, new QTableWidgetItem("没有找到规则"));
+        return;
+    }
+
+    for (const auto& ruleVal : rules) {
+        QJsonObject obj = ruleVal.toObject();
+
+        // Skip comment objects (they have "//" keys)
+        if (obj.contains("//")) continue;
+
+        QString id = obj["id"].toString();
+        int code = obj["code"].toInt();
+        QString process = obj["process"].toString();
+        QString target = obj["target"].toString();
+        int action = obj["action"].toInt();
+        int score = obj["score"].toInt();
+
+        HipsRuleItem item;
+        item.id = id;
+        item.code = QString::number(code);
+        item.process = process;
+        item.target = target;
+        item.action = action;
+        item.score = score;
+        item.enabled = true;
+
+        // Determine type label from code
+        QString typeLabel;
+        switch (code) {
+            case 2001: typeLabel = "文件保护"; break;
+            case 2011: typeLabel = "学习模式"; break;
+            case 3001: typeLabel = "注册表保护"; break;
+            case 4001: typeLabel = "磁盘写入"; break;
+            case 5001: typeLabel = "勒索防护"; break;
+            case 6001: typeLabel = "注入检测"; break;
+            case 6002: typeLabel = "银狐检测"; break;
+            default:   typeLabel = "其他(" + QString::number(code) + ")"; break;
+        }
+
+        QString desc = process;
+        if (!target.isEmpty() && target != "") {
+            desc += " → " + target;
+        }
+
+        QString actionLabel;
+        switch (action) {
+            case 0: actionLabel = "放行"; break;
+            case 1: actionLabel = "拦截"; break;
+            case 2: actionLabel = "询问"; break;
+            default: actionLabel = "未知"; break;
+        }
+
+        int row = m_hipsTable->rowCount();
+        m_hipsTable->insertRow(row);
+
+        // Column 0: Rule ID
+        m_hipsTable->setItem(row, 0, new QTableWidgetItem(id));
+
+        // Column 1: Type
+        m_hipsTable->setItem(row, 1, new QTableWidgetItem(typeLabel));
+
+        // Column 2: Process → Target
+        m_hipsTable->setItem(row, 2, new QTableWidgetItem(desc));
+
+        // Column 3: Score
+        m_hipsTable->setItem(row, 3, new QTableWidgetItem(
+            action == 0 ? QString("放行") : QString::number(score)));
+
+        // Column 4: Enable checkbox
+        auto* checkWidget = new QWidget();
+        auto* checkLayout = new QHBoxLayout(checkWidget);
+        checkLayout->setContentsMargins(0, 0, 0, 0);
+        checkLayout->setAlignment(Qt::AlignCenter);
+        auto* checkBox = new QCheckBox();
+        checkBox->setChecked(item.enabled);
+        checkBox->setProperty("ruleIndex", row);
+        connect(checkBox, &QCheckBox::toggled, this, [this, row](bool checked) {
+            if (row < m_rules.size()) {
+                m_rules[row].enabled = checked;
+            }
+        });
+        checkLayout->addWidget(checkBox);
+        m_hipsTable->setCellWidget(row, 4, checkWidget);
+
+        m_rules.append(item);
+    }
+
+    m_hipsTable->resizeRowsToContents();
 }
 
 // ── Tool: Whitelist Manager ──────────────────────────────────────
@@ -1327,9 +1377,30 @@ void MainWindow::setupQuarantineManager(QWidget* page) {
         int row = sel[0]->row();
         QString origPath = m_quarantineTable->item(row, 2)->text();
         QString qPath = m_quarantineTable->item(row, 0)->text();
-        if (MoveFileW((const wchar_t*)qPath.utf16(), (const wchar_t*)origPath.utf16())) {
+        if (origPath.isEmpty() || origPath == "-") {
+            onAppendLog("WARN", "隔离区", "无法恢复：原始路径未知");
+            return;
+        }
+        // 创建目标父目录（可能已被删除）
+        int lastSlash = origPath.lastIndexOf('\\');
+        if (lastSlash > 0) {
+            QString dir = origPath.left(lastSlash);
+            QDir().mkpath(dir);
+        }
+        // 用 CopyFile + DeleteFile 代替 MoveFileW（支持跨卷）
+        if (CopyFileW((const wchar_t*)qPath.utf16(), (const wchar_t*)origPath.utf16(), FALSE)) {
+            DeleteFileW((const wchar_t*)qPath.utf16());
+            // 删除 .info 文件
+            DeleteFileW((std::wstring((const wchar_t*)qPath.utf16()) + L".info").c_str());
             onRefreshQuarantine();
             onAppendLog("INFO", "隔离区", "已恢复: " + origPath);
+        } else {
+            DWORD err = GetLastError();
+            QString errMsg;
+            if (err == 5) errMsg = "访问被拒绝（目标文件可能被占用）";
+            else if (err == 80) errMsg = "目标文件已存在";
+            else errMsg = "错误码 " + QString::number(err);
+            onAppendLog("ERROR", "隔离区", "恢复失败: " + errMsg + " -> " + origPath);
         }
     });
     ctrl->addWidget(restoreBtn);
@@ -1344,8 +1415,12 @@ void MainWindow::setupQuarantineManager(QWidget* page) {
         int row = sel[0]->row();
         QString qPath = m_quarantineTable->item(row, 0)->text();
         if (DeleteFileW((const wchar_t*)qPath.utf16())) {
+            // 同时删除 .info 文件
+            DeleteFileW((std::wstring((const wchar_t*)qPath.utf16()) + L".info").c_str());
             onRefreshQuarantine();
             onAppendLog("INFO", "隔离区", "已永久删除隔离文件");
+        } else {
+            onAppendLog("ERROR", "隔离区", "删除失败: 错误码 " + QString::number(GetLastError()));
         }
     });
     ctrl->addWidget(deleteBtn);
@@ -1377,20 +1452,25 @@ void MainWindow::onRefreshQuarantine() {
         if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
         if (wcslen(findData.cFileName) == 0) continue;
 
+        // 跳过 .info 文件
+        std::wstring fname = findData.cFileName;
+        if (fname.size() >= 5 && fname.substr(fname.size() - 5) == L".info") continue;
+
         QString fullPath = QString::fromWCharArray(quarantineDir) + "\\" +
                           QString::fromWCharArray(findData.cFileName);
 
-        // Read original path from companion .info file
+        // Read original path from companion .info file (written as UTF-16LE wchar_t)
         QString infoPath = fullPath + ".info";
         QString origPath = "-";
         HANDLE hInfo = CreateFileW((const wchar_t*)infoPath.utf16(), GENERIC_READ,
                                     FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                     FILE_ATTRIBUTE_NORMAL, nullptr);
         if (hInfo != INVALID_HANDLE_VALUE) {
-            char buf[1024] = {0};
+            wchar_t wbuf[512] = {0};
             DWORD read = 0;
-            if (ReadFile(hInfo, buf, sizeof(buf) - 1, &read, nullptr)) {
-                origPath = QString::fromUtf8(buf);
+            if (ReadFile(hInfo, wbuf, sizeof(wbuf) - sizeof(wchar_t), &read, nullptr)) {
+                wbuf[read / sizeof(wchar_t)] = L'\0';
+                origPath = QString::fromWCharArray(wbuf);
             }
             CloseHandle(hInfo);
         }
@@ -1561,9 +1641,6 @@ void MainWindow::setupEdrManager(QWidget* page) {
     m_chkEnableSignature = new QCheckBox("启用签名验证");
     m_chkEnableSignature->setObjectName("configCheckBox");
     scanL->addWidget(m_chkEnableSignature, 1, 0);
-    m_chkEnableEntropy = new QCheckBox("启用熵分析");
-    m_chkEnableEntropy->setObjectName("configCheckBox");
-    scanL->addWidget(m_chkEnableEntropy, 1, 1);
     t1L->addWidget(scanGroup);
 
     auto* yaraGroup = new QGroupBox("YARA 规则路径");
@@ -1901,7 +1978,6 @@ void MainWindow::onRefreshEdrRules() {
         m_chkEnableYara->setChecked(enabled["enable_yara"].toBool(true));
         m_chkEnablePeHeuristics->setChecked(enabled["enable_pe_heuristics"].toBool(true));
         m_chkEnableSignature->setChecked(enabled["enable_signature_check"].toBool(true));
-        m_chkEnableEntropy->setChecked(enabled["enable_entropy_analysis"].toBool(true));
     }
 
     // Load scoring
@@ -2031,7 +2107,6 @@ void MainWindow::onSaveEdrRules() {
     enabled["enable_yara"] = m_chkEnableYara->isChecked();
     enabled["enable_pe_heuristics"] = m_chkEnablePeHeuristics->isChecked();
     enabled["enable_signature_check"] = m_chkEnableSignature->isChecked();
-    enabled["enable_entropy_analysis"] = m_chkEnableEntropy->isChecked();
     root["Rule_Scanning_Enabled"] = enabled;
 
     // Save scoring

@@ -199,13 +199,20 @@ static BOOLEAN PrefixHashMatch(PCWSTR Str, USHORT Len, PPREFIX_HASH_TABLE Tbl) {
     if (*p == L'\\') p++;
     if (p[0] && p[1] == L':') p += 2;
     if (*p == L'\\') p++;
-    PCWSTR s = p;
-    while (*p && *p != L'\\') p++;
-    USHORT clen = (USHORT)(p - s);
-    if (!clen) return TRUE;
-    ULONG ih = FnvHashW(s, clen);
-    for (ULONG i = 0; i < Tbl->Count; i++)
-        if (Tbl->Entries[i].Hash == ih) return TRUE;
+    // 检查多个路径组件以兼容 NT 设备路径格式
+    // 驱动返回的进程路径是 \Device\HarddiskVolume3\Program Files\... 格式
+    // 第一个组件是 "Device" 而非真实目录名，需要跳过 NT 前缀组件
+    for (int comp = 0; comp < 4; comp++) {
+        PCWSTR s = p;
+        while (*p && *p != L'\\') p++;
+        USHORT clen = (USHORT)(p - s);
+        if (!clen) return TRUE;
+        ULONG ih = FnvHashW(s, clen);
+        for (ULONG i = 0; i < Tbl->Count; i++)
+            if (Tbl->Entries[i].Hash == ih) return TRUE;
+        if (*p != L'\\') break;
+        p++; // 跳过反斜杠进入下一组件
+    }
     return FALSE;
 }
 
@@ -640,6 +647,34 @@ NTSTATUS LoadRulesFromDisk(PUNICODE_STRING RegistryPath) {
 		}
 	}
 
+	// Also add IsSignedImageLocation hardcoded path components for prefix pre-filter
+	{
+		PCWSTR signedLocPatterns[] = {
+			L"*\\Windows\\*",
+			L"*\\Program Files\\*",
+			L"*\\Program Files (x86)\\*",
+			L"*\\Common Files\\*",
+			L"*\\ProgramData\\*",
+		};
+		for (int i = 0; i < (int)(sizeof(signedLocPatterns) / sizeof(signedLocPatterns[0])) && g_ProcessPrefixHashes.Count < MAX_PREFIX_HASHES; i++) {
+			ULONG hash = ExtractFirstComponentHash(signedLocPatterns[i]);
+			if (hash != 0) {
+				BOOLEAN found = FALSE;
+				for (ULONG j = 0; j < g_ProcessPrefixHashes.Count; j++) {
+					if (g_ProcessPrefixHashes.Entries[j].Hash == hash) {
+						found = TRUE;
+						break;
+					}
+				}
+				if (!found) {
+					g_ProcessPrefixHashes.Entries[g_ProcessPrefixHashes.Count].Hash = hash;
+					g_ProcessPrefixHashes.Entries[g_ProcessPrefixHashes.Count].HasLeadingWildcard = TRUE;
+					g_ProcessPrefixHashes.Count++;
+				}
+			}
+		}
+	}
+
 	// Print final rule counts
 	DbgPrint("ZETA: LoadRulesFromDisk - final rule counts: RegistryBlockList=%lu, RegistryTrustedList=%lu, "
  "ProcessTrustedPaths=%lu, ProcessExploitable=%lu, FileProtectedPaths=%lu, "
@@ -736,13 +771,6 @@ static BOOLEAN IsFileDigitallySigned(PUNICODE_STRING ImagePath) {
  IMAGE_DOS_HEADER dosHeader = {0};
  LARGE_INTEGER byteOffset = { 0, 0 };
  IMAGE_NT_HEADERS ntHeaders = {0};
- BOOLEAN signedResult = FALSE;
- ULONG certSize, certAddr, readSize;
- PVOID certBuffer;
- PUCHAR p;
- PUCHAR subject, issuer;
- ULONG sl, il;
- ULONG i, j;
 
  InitializeObjectAttributes(&oa, ImagePath, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
 
@@ -760,50 +788,20 @@ static BOOLEAN IsFileDigitallySigned(PUNICODE_STRING ImagePath) {
  byteOffset.QuadPart = dosHeader.e_lfanew;
  RtlZeroMemory(&iosb, sizeof(iosb));
  status = ZwReadFile(fileHandle, NULL, NULL, NULL, &iosb, &ntHeaders, sizeof(ntHeaders), &byteOffset, NULL);
+ ZwClose(fileHandle);
 
- if (NT_SUCCESS(status) && ntHeaders.Signature == IMAGE_NT_SIGNATURE) {
-  certSize = ntHeaders.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].Size;
-  certAddr = ntHeaders.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].VirtualAddress;
-  if (certSize > 0 && certAddr > 0) {
-   byteOffset.QuadPart = certAddr;
-   RtlZeroMemory(&iosb, sizeof(iosb));
-   
-   readSize = min(certSize, 4096UL);
-   certBuffer = ExAllocatePool2(POOL_FLAG_NON_PAGED, readSize, 'ZETA');
-   if (certBuffer) {
-    status = ZwReadFile(fileHandle, NULL, NULL, NULL, &iosb, certBuffer, readSize, &byteOffset, NULL);
-    if (NT_SUCCESS(status)) {
-     p = (PUCHAR)certBuffer;
-     subject = NULL;
-     issuer = NULL;
-     
-     for (i = 0; i < iosb.Information - 10; i++) {
-      if (p[i] == 0x30 && p[i+1] == 0x82 && (p[i+6] == 0x30 || p[i+7] == 0x30)) {
-       for (j = i + 8; j < iosb.Information - 5; j++) {
-        if (p[j] == 0x30 && p[j+1] == 0x82 && p[j+2] == 0x09 && p[j+3] == 0x03) { issuer = &p[j]; break; }
-       }
-       for (j = i + 8; j < iosb.Information - 5; j++) {
-        if (p[j] == 0x30 && p[j+1] == 0x82 && p[j+2] == 0x09 && p[j+3] == 0x04) { subject = &p[j]; break; }
-       }
-       break;
-      }
-     }
-     
-     if (subject && issuer && subject != issuer) {
-      sl = min((ULONG)(iosb.Information - (subject - (PUCHAR)certBuffer)), 256UL);
-      il = min((ULONG)(iosb.Information - (issuer - (PUCHAR)certBuffer)), 256UL);
-      if (RtlCompareMemory(subject, issuer, min(sl, il)) != min(sl, il)) {
-       signedResult = TRUE;
-      }
-     }
-    }
-    ExFreePool(certBuffer);
-   }
-  }
+ if (!NT_SUCCESS(status) || ntHeaders.Signature != IMAGE_NT_SIGNATURE) {
+  return FALSE;
  }
 
- ZwClose(fileHandle);
- return signedResult;
+ ULONG certSize = ntHeaders.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].Size;
+ ULONG certAddr = ntHeaders.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY].VirtualAddress;
+
+ if (certSize > 0 && certAddr > 0) {
+  return TRUE;
+ }
+
+ return FALSE;
 }
 
 static BOOLEAN IsWindowsSystemApp(PCWSTR Buffer, USHORT Length) {
@@ -830,6 +828,9 @@ static BOOLEAN IsSignedImageLocation(PCWSTR Buffer, USHORT Length) {
  if (WildcardMatch(L"*\\Program Files (x86)\\*", Buffer, Length)) return TRUE;
  if (WildcardMatch(L"*\\Common Files\\*", Buffer, Length)) return TRUE;
 
+ // Windows Defender (ProgramData on newer Windows)
+ if (WildcardMatch(L"*\\ProgramData\\Microsoft\\Windows Defender\\*", Buffer, Length)) return TRUE;
+
  return FALSE;
 }
 
@@ -849,9 +850,16 @@ TRUST_LEVEL GetProcessTrustLevel(HANDLE ProcessId) {
  createTime.QuadPart = PsGetProcessCreateTimeQuadPart(Process);
 
  // Check trust window first (fastest path)
- if (IsInTrustWindow((ULONG)(ULONG_PTR)ProcessId)) {
-  ObDereferenceObject(Process);
-  return TRUST_LEVEL_SIGNED;
+ // Now matches by process image PATH, not PID — so all processes sharing
+ // the same executable (e.g., Electron child processes) are covered.
+ PUNICODE_STRING imageName = NULL;
+ if (NT_SUCCESS(SeLocateProcessImageName(Process, &imageName)) && imageName && imageName->Buffer) {
+  BOOLEAN inWindow = IsInTrustWindow(imageName->Buffer);
+  ExFreePool(imageName);
+  if (inWindow) {
+   ObDereferenceObject(Process);
+   return TRUST_LEVEL_SIGNED;
+  }
  }
 
  // Check trust cache
@@ -975,7 +983,7 @@ VOID InitializeTrustWindow() {
  DbgPrint("ZETA: TrustWindow initialized\n");
 }
 
-BOOLEAN IsInTrustWindow(ULONG ProcessId) {
+BOOLEAN IsInTrustWindow(PCWSTR ProcessPath) {
  KIRQL oldIrql;
  KeAcquireSpinLock(&g_TrustWindowLock, &oldIrql);
 
@@ -986,7 +994,11 @@ BOOLEAN IsInTrustWindow(ULONG ProcessId) {
  for (PLIST_ENTRY entry = g_TrustWindowList.Flink;
    entry != &g_TrustWindowList; entry = entry->Flink) {
   PTRUST_WINDOW_ENTRY cur = CONTAINING_RECORD(entry, TRUST_WINDOW_ENTRY, ListEntry);
-  if (cur->ProcessId == ProcessId) {
+  // Case-insensitive path comparison
+  UNICODE_STRING curPath, searchPath;
+  RtlInitUnicodeString(&curPath, cur->ProcessPath);
+  RtlInitUnicodeString(&searchPath, ProcessPath);
+  if (RtlEqualUnicodeString(&curPath, &searchPath, TRUE)) {
    if (now.QuadPart < cur->ExpiryTime.QuadPart) {
     found = TRUE;  // still in window
    } else {
@@ -1002,15 +1014,43 @@ BOOLEAN IsInTrustWindow(ULONG ProcessId) {
  return found;
 }
 
-VOID AddToTrustWindow(ULONG ProcessId) {
+// ── Get full NT device path from a PID (PASSIVE_LEVEL only) ──
+BOOLEAN GetProcessPathFromPid(ULONG ProcessId, PWCHAR OutPath, ULONG OutChars) {
+ if (!OutPath || OutChars == 0) return FALSE;
+
+ PEPROCESS Process = NULL;
+ if (!NT_SUCCESS(PsLookupProcessByProcessId((HANDLE)(ULONG_PTR)ProcessId, &Process))) {
+  return FALSE;
+ }
+
+ PUNICODE_STRING imageName = NULL;
+ BOOLEAN result = FALSE;
+ if (NT_SUCCESS(SeLocateProcessImageName(Process, &imageName)) && imageName && imageName->Buffer) {
+  ULONG copyChars = (imageName->Length / sizeof(WCHAR)) < (OutChars - 1)
+   ? (imageName->Length / sizeof(WCHAR)) : (OutChars - 1);
+  RtlCopyMemory(OutPath, imageName->Buffer, copyChars * sizeof(WCHAR));
+  OutPath[copyChars] = L'\0';
+  result = TRUE;
+  ExFreePool(imageName);
+ }
+
+ ObDereferenceObject(Process);
+ return result;
+}
+
+VOID AddToTrustWindow(PCWSTR ProcessPath) {
  KIRQL oldIrql;
  KeAcquireSpinLock(&g_TrustWindowLock, &oldIrql);
 
- // Remove existing entry for this PID (to refresh timer)
+ // Remove existing entry for this path (to refresh timer)
+ UNICODE_STRING searchPath;
+ RtlInitUnicodeString(&searchPath, ProcessPath);
  for (PLIST_ENTRY entry = g_TrustWindowList.Flink;
    entry != &g_TrustWindowList; entry = entry->Flink) {
   PTRUST_WINDOW_ENTRY cur = CONTAINING_RECORD(entry, TRUST_WINDOW_ENTRY, ListEntry);
-  if (cur->ProcessId == ProcessId) {
+  UNICODE_STRING curPath;
+  RtlInitUnicodeString(&curPath, cur->ProcessPath);
+  if (RtlEqualUnicodeString(&curPath, &searchPath, TRUE)) {
    RemoveEntryList(&cur->ListEntry);
    ZetaFree(cur);
    break;
@@ -1034,24 +1074,31 @@ VOID AddToTrustWindow(ULONG ProcessId) {
  // Add new entry
  PTRUST_WINDOW_ENTRY newEntry = (PTRUST_WINDOW_ENTRY)ZetaAllocate(sizeof(TRUST_WINDOW_ENTRY));
  if (newEntry) {
-  newEntry->ProcessId = ProcessId;
+  ULONG copyChars = (ULONG)wcslen(ProcessPath);
+  if (copyChars >= TRUST_WINDOW_PATH_LEN) copyChars = TRUST_WINDOW_PATH_LEN - 1;
+  RtlCopyMemory(newEntry->ProcessPath, ProcessPath, copyChars * sizeof(WCHAR));
+  newEntry->ProcessPath[copyChars] = L'\0';
   KeQuerySystemTime(&newEntry->ExpiryTime);
   newEntry->ExpiryTime.QuadPart += (LONGLONG)TRUST_WINDOW_SEC * 10000000LL;
   InsertTailList(&g_TrustWindowList, &newEntry->ListEntry);
  }
 
  KeReleaseSpinLock(&g_TrustWindowLock, oldIrql);
- DbgPrint("ZETA: AddToTrustWindow - PID %lu added for %ds\n", ProcessId, TRUST_WINDOW_SEC);
+ DbgPrint("ZETA: AddToTrustWindow - %ws added for %ds\n", ProcessPath, TRUST_WINDOW_SEC);
 }
 
-VOID RemoveFromTrustWindow(ULONG ProcessId) {
+VOID RemoveFromTrustWindow(PCWSTR ProcessPath) {
  KIRQL oldIrql;
  KeAcquireSpinLock(&g_TrustWindowLock, &oldIrql);
 
+ UNICODE_STRING searchPath;
+ RtlInitUnicodeString(&searchPath, ProcessPath);
  for (PLIST_ENTRY entry = g_TrustWindowList.Flink;
    entry != &g_TrustWindowList; entry = entry->Flink) {
   PTRUST_WINDOW_ENTRY cur = CONTAINING_RECORD(entry, TRUST_WINDOW_ENTRY, ListEntry);
-  if (cur->ProcessId == ProcessId) {
+  UNICODE_STRING curPath;
+  RtlInitUnicodeString(&curPath, cur->ProcessPath);
+  if (RtlEqualUnicodeString(&curPath, &searchPath, TRUE)) {
    RemoveEntryList(&cur->ListEntry);
    ZetaFree(cur);
    break;
@@ -1641,6 +1688,10 @@ VOID LineageTracker_OnProcessCreate(HANDLE ParentId, HANDLE ProcessId, BOOLEAN C
             }
         }
         KeReleaseSpinLock(&g_LineageLock, OldIrql);
+
+        // Trigger file rollback for terminated untrusted processes
+        Rollback_Execute(pid);
+
         return;
     }
 

@@ -51,6 +51,7 @@ const unsigned long ZETA_CMD_ALLOW_OP = 4;
 const unsigned long ZETA_CMD_DENY_OP = 5;
 const unsigned long ZETA_CMD_SET_LINEAGE_TRACKER = 6;
 const unsigned long ZETA_CMD_SET_RANSOM_EXPERIMENTAL = 7;
+const unsigned long ZETA_CMD_ROLLBACK_MARK = 8;
 const unsigned long ZETA_CMD_RELOAD_RULES = 15;
 
 // Block codes from driver

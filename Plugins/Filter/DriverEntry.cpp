@@ -2,6 +2,7 @@
 
 DRIVER_DATA GlobalData;
 static BOOLEAN g_ImageNotifyRegistered = FALSE;
+BOOLEAN g_ProcessNotifyExActive = FALSE;
 WORK_ITEM_TRACKER g_WorkItemTracker = { 0 };
 
 // Trust window global variables
@@ -15,6 +16,82 @@ ULONG g_DriverLogLevel = ZETA_LOG_INFO;
 // Also includes rule counts set by ProtectRules.cpp during LoadRulesFromDisk
 static LARGE_INTEGER g_DriverStartTick = {0};
 DRIVER_STATE g_DriverState = {0};
+
+// ============================================================
+// ProcessCreateNotifyEx — PsSetCreateProcessNotifyRoutineEx callback
+//
+// Primary path: captures process creation with ImageFileName,
+// CommandLine and ParentProcessId from PS_CREATE_NOTIFY_INFO.
+// Sends to user-mode so EDR can log command line and lineage info.
+//
+// Fallback: if this registration fails, the existing user-mode
+// ProcessMonitor (CreateToolhelp32Snapshot polling) continues
+// to work with basic PID/PPID/name visibility.
+// ============================================================
+#define PROCESS_NOTIFY_PATH_DELIM L'\n'
+
+static VOID ProcessCreateNotifyEx(
+    PEPROCESS Process,
+    HANDLE ProcessId,
+    PPS_CREATE_NOTIFY_INFO CreateInfo
+) {
+    UNREFERENCED_PARAMETER(Process);
+
+    if (g_IsUnloading) return;
+
+    ULONG pid = (ULONG)(ULONG_PTR)ProcessId;
+    if (pid <= 4) return;
+
+    if (CreateInfo != NULL) {
+        // ── Process creation ──
+        ULONG ppid = (ULONG)(ULONG_PTR)CreateInfo->ParentProcessId;
+
+        WCHAR buf[MAX_PATH_LEN];
+        RtlZeroMemory(buf, sizeof(buf));
+        PWCHAR ptr = buf;
+        ULONG remaining = MAX_PATH_LEN;
+
+        // Section 1: ImageFileName (NT device path)
+        if (CreateInfo->ImageFileName && CreateInfo->ImageFileName->Buffer) {
+            ULONG copyChars = CreateInfo->ImageFileName->Length / sizeof(WCHAR);
+            if (copyChars > MAX_PATH_LEN - 4) copyChars = MAX_PATH_LEN - 4;
+            RtlCopyMemory(ptr, CreateInfo->ImageFileName->Buffer, copyChars * sizeof(WCHAR));
+            ptr += copyChars;
+            remaining -= copyChars;
+        }
+
+        // Delimiter 1: end of image path
+        if (remaining > 1) { *ptr++ = PROCESS_NOTIFY_PATH_DELIM; remaining--; }
+
+        // Section 2: CommandLine
+        if (CreateInfo->CommandLine && CreateInfo->CommandLine->Buffer && remaining > 2) {
+            ULONG cmdChars = CreateInfo->CommandLine->Length / sizeof(WCHAR);
+            if (cmdChars > remaining - 2) cmdChars = remaining - 2;
+            RtlCopyMemory(ptr, CreateInfo->CommandLine->Buffer, cmdChars * sizeof(WCHAR));
+            ptr += cmdChars;
+            remaining -= cmdChars;
+        }
+
+        // Delimiter 2: end of command line
+        if (remaining > 1) { *ptr++ = PROCESS_NOTIFY_PATH_DELIM; remaining--; }
+
+        // Section 3: PPID as decimal string
+        WCHAR ppidStr[16];
+        RtlStringCbPrintfW(ppidStr, sizeof(ppidStr), L"%lu", ppid);
+        ULONG ppidLen = (ULONG)wcslen(ppidStr);
+        if (ppidLen < remaining) {
+            RtlCopyMemory(ptr, ppidStr, ppidLen * sizeof(WCHAR));
+            ptr += ppidLen;
+        }
+
+        ULONG totalBytes = (ULONG)((ULONG_PTR)ptr - (ULONG_PTR)buf);
+        if (totalBytes > sizeof(WCHAR)) {
+            SendMessageToUser(ZETA_MSG_PROCESS_CREATE, pid, buf, totalBytes);
+        }
+    }
+    // Process exit (CreateInfo == NULL): no action needed,
+    // user-mode ProcessMonitor polling handles cleanup.
+}
 
 static NTSTATUS InstanceSetup(PCFLT_RELATED_OBJECTS FltObjects, FLT_INSTANCE_SETUP_FLAGS Flags, DEVICE_TYPE VolumeDeviceType, FLT_FILESYSTEM_TYPE VolumeFilesystemType) {
  UNREFERENCED_PARAMETER(FltObjects);
@@ -63,6 +140,13 @@ static NTSTATUS DriverUnload(FLT_FILTER_UNLOAD_FLAGS Flags) {
   PsSetCreateProcessNotifyRoutine(LineageTracker_OnProcessCreate, TRUE);
   g_LineageTrackerEnabled = FALSE;
   DbgPrint("ZETA: DriverUnload: process notify removed\n");
+ }
+
+ // 3b. Remove process creation notify (Ex) for user-mode command line reporting
+ if (g_ProcessNotifyExActive) {
+  PsSetCreateProcessNotifyRoutineEx(ProcessCreateNotifyEx, TRUE);
+  g_ProcessNotifyExActive = FALSE;
+  DbgPrint("ZETA: DriverUnload: process notify (Ex) removed\n");
  }
 
  // 4. Remove image load notify
@@ -120,7 +204,7 @@ static NTSTATUS PortMessage(PVOID PortCookie, PVOID InputBuffer, ULONG InputBuff
   WCHAR LogBuf[2048];
   ULONG LogLen;
   RtlStringCbPrintfW(LogBuf, sizeof(LogBuf),
-   L"DriverInit: RulesEngine=%ls Filter=%ls Port=%ls ProcessProt=%ls(0x%08lX) RegProt=%ls ImageNotify=%ls FilterStart=%ls AnyFail=%ls\n"
+	 L"DriverInit: RulesEngine=%ls Filter=%ls Port=%ls ProcessProt=%ls(0x%08lX) RegProt=%ls ImageNotify=%ls LineageNotify=%ls ProcessNotifyEx=%ls(0x%08lX) FilterStart=%ls AnyFail=%ls\n"
    L"Kernel Rules: Rules_Driver_P1=%ls(0x%08lX) Rules_User=%ls(0x%08lX)\n"
    L"Rules: RegistryBlock=%lu RegistryTrust=%lu ProcessTrust=%lu ProcessExploit=%lu FileProtect=%lu FileExcept=%lu FileSafe=%lu FileRansom=%lu",
    g_DriverState.RulesEngineOK ? L"OK" : L"FAIL",
@@ -130,6 +214,9 @@ static NTSTATUS PortMessage(PVOID PortCookie, PVOID InputBuffer, ULONG InputBuff
    g_DriverState.ProcessProtectionStatus,
    g_DriverState.RegistryProtectionOK ? L"OK" : L"FAIL",
    g_DriverState.ImageNotifyOK ? L"OK" : L"FAIL",
+   g_DriverState.LineageTrackerOK ? L"OK" : L"FAIL",
+   g_DriverState.ProcessNotifyExOK ? L"OK" : L"FAIL",
+   g_DriverState.ProcessNotifyExStatus,
    g_DriverState.FilterStarted ? L"OK" : L"FAIL",
    g_DriverState.AnyFailure ? L"YES" : L"NO",
    NT_SUCCESS(g_DriverState.SystemRulesStatus) ? L"OK" : L"FAIL",
@@ -184,6 +271,18 @@ if (msg->Command == ZETA_CMD_ALLOW_OP || msg->Command == ZETA_CMD_DENY_OP) {
  if (msg->Command == ZETA_CMD_SET_RANSOM_EXPERIMENTAL) {
   BOOLEAN enable = (msg->Path[0] == L'1');
   RansomExp_SetEnabled(enable);
+  if (ReturnOutputBufferLength) *ReturnOutputBufferLength = 0;
+  return STATUS_SUCCESS;
+ }
+
+ if (msg->Command == ZETA_CMD_ROLLBACK_MARK) {
+  ULONG targetPid = 0;
+  for (int i = 0; i < MAX_PATH_LEN && msg->Path[i]; i++) {
+   targetPid = targetPid * 10 + (ULONG)(msg->Path[i] - L'0');
+  }
+  if (targetPid > 0) {
+   Rollback_MarkTerminated(targetPid);
+  }
   if (ReturnOutputBufferLength) *ReturnOutputBufferLength = 0;
   return STATUS_SUCCESS;
  }
@@ -355,6 +454,7 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
  KeInitializeSpinLock(&GlobalData.TrackerMutex);
  KeInitializeSpinLock(&g_SilverFoxLock);
  RtlZeroMemory(&g_SilverFoxTrackers, sizeof(g_SilverFoxTrackers));
+ KeInitializeSpinLock(&g_RollbackLock);
  ZETA_DEBUG("Global data initialized\n");
 
  ExInitializeRundownProtection(&GlobalData.PortRundown);
@@ -446,6 +546,21 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
 	} else {
 	g_DriverState.LineageTrackerOK = TRUE;
 	ZETA_INFO("Process creation notify registered for LineageTracker\n");
+	}
+
+	// [STEP3b] Process creation notify (Ex) — provides CommandLine + PPID
+	g_ProcessNotifyExActive = FALSE;
+	g_DriverState.ProcessNotifyExOK = FALSE;
+	g_DriverState.ProcessNotifyExStatus = STATUS_NOT_SUPPORTED;
+	status = PsSetCreateProcessNotifyRoutineEx(ProcessCreateNotifyEx, FALSE);
+	if (!NT_SUCCESS(status)) {
+	g_DriverState.ProcessNotifyExStatus = status;
+	ZETA_WARN("PsSetCreateProcessNotifyRoutineEx FAILED (0x%08X) - fallback to polling\n", status);
+	} else {
+	g_ProcessNotifyExActive = TRUE;
+	g_DriverState.ProcessNotifyExOK = TRUE;
+	g_DriverState.ProcessNotifyExStatus = STATUS_SUCCESS;
+	ZETA_INFO("Process creation notify (Ex) registered — command line capture active\n");
 	}
 
 	// [STEP4] Image load notify

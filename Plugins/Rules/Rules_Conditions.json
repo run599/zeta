@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "comment": "状态机 HIPS 条件库 - 定义全部单一条件(状态点/事件谓词)，返回 true/false。与 Rules_Compose.json 配合使用。",
+  "conditions": {
+    "proc_unsigned": {
+      "type": "process_state",
+      "field": "trust_level",
+      "op": "le",
+      "value": 1,
+      "expect": true
+    },
+    "proc_signed": {
+      "type": "process_state",
+      "field": "trust_level",
+      "op": "ge",
+      "value": 3,
+      "expect": true
+    },
+    "proc_script_host": {
+      "type": "process_state",
+      "field": "script_chain_depth",
+      "op": "gt",
+      "value": 0,
+      "expect": true
+    },
+    "proc_has_script_ancestor": {
+      "type": "process_state",
+      "field": "has_script_ancestor",
+      "op": "eq",
+      "value": true,
+      "expect": true
+    },
+    "proc_in_tempdir": {
+      "type": "process_state",
+      "field": "process_path",
+      "op": "contains",
+      "value": "\\Temp\\",
+      "expect": true
+    },
+    "proc_in_appdata": {
+      "type": "process_state",
+      "field": "process_path",
+      "op": "contains",
+      "value": "\\AppData\\",
+      "expect": true
+    },
+    "proc_wrote_runkey": {
+      "type": "process_state",
+      "field": "wrote_runkey",
+      "op": "eq",
+      "value": true,
+      "expect": true
+    },
+    "proc_released_pe": {
+      "type": "process_state",
+      "field": "pe_releases",
+      "op": "gt",
+      "value": 0,
+      "expect": true
+    },
+    "proc_injected": {
+      "type": "process_state",
+      "field": "remote_thread_count",
+      "op": "gt",
+      "value": 0,
+      "expect": true
+    },
+    "proc_loaded_driver": {
+      "type": "process_state",
+      "field": "driver_load_count",
+      "op": "gt",
+      "value": 0,
+      "expect": true
+    },
+    "proc_hit_honeypot": {
+      "type": "process_state",
+      "field": "honey_file_touch_count",
+      "op": "gt",
+      "value": 0,
+      "expect": true
+    },
+    "parent_unsigned": {
+      "type": "relation",
+      "field": "parent_trust_level",
+      "op": "le",
+      "value": 1,
+      "expect": true
+    },
+    "trusted_chain": {
+      "type": "relation",
+      "field": "trusted_chain",
+      "op": "eq",
+      "value": true,
+      "expect": true
+    },
+    "evt_write_sys": {
+      "type": "event",
+      "field": "code",
+      "op": "eq",
+      "value": 2001,
+      "expect": true
+    },
+    "evt_write_sys_ext": {
+      "type": "event",
+      "field": "path",
+      "op": "endswith",
+      "value": ".sys",
+      "expect": true
+    },
+    "evt_write_pe": {
+      "type": "event",
+      "field": "path",
+      "op": "endswith",
+      "value": ".exe",
+      "expect": true
+    },
+    "evt_load_driver": {
+      "type": "event",
+      "field": "code",
+      "op": "eq",
+      "value": 7010,
+      "expect": true
+    },
+    "evt_runkey_write": {
+      "type": "event",
+      "field": "reg_flag",
+      "op": "eq",
+      "value": "is_runkey",
+      "expect": true
+    },
+    "evt_create_process": {
+      "type": "event",
+      "field": "code",
+      "op": "eq",
+      "value": 7006,
+      "expect": true
+    }
+  }
+}

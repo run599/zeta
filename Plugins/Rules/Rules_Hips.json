@@ -1,0 +1,1723 @@
+{
+    "//": "  process_exact - true=精确匹配进程名, false=子串匹配",
+    "rules": [
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "//": " 一、进程保护 — 可信进程放行（EDR 零分信任）         "
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_zeta",
+            "process": "ZETA.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_exp",
+            "process": "explorer.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_not",
+            "process": "notepad.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_wrd",
+            "process": "wordpad.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_chr",
+            "process": "chrome.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_edg",
+            "process": "msedge.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_fox",
+            "process": "firefox.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_rar",
+            "process": "winrar.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_7z1",
+            "process": "7zFM.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_7z2",
+            "process": "7z.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_wwd",
+            "process": "WINWORD.EXE",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_xcl",
+            "process": "EXCEL.EXE",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_ppt",
+            "process": "POWERPNT.EXE",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_wps",
+            "process": "wps.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_vsc",
+            "process": "Code.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_vs",
+            "process": "devenv.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_txt",
+            "process": "typora.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_obs",
+            "process": "Obsidian.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_pnt",
+            "process": "mspaint.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_snp",
+            "process": "Snipaste.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_wgr",
+            "process": "WeGram.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_tim",
+            "process": "TIM.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_wxg",
+            "process": "WeChat.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_qq",
+            "process": "QQ.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_tlg",
+            "process": "Telegram.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_dc",
+            "process": "Discord.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_pdf",
+            "process": "Acrobat.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_pdf2",
+            "process": "FoxitPDF.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_stm",
+            "process": "Steam.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_epc",
+            "process": "EpicGamesLauncher.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_btn",
+            "process": "Battle.net.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_ptp",
+            "process": "PotPlayer.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_vlc",
+            "process": "vlc.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_evy",
+            "process": "Everything.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_bdz",
+            "process": "Bandizip.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_shx",
+            "process": "ShareX.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_git",
+            "process": "git.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_ida",
+            "process": "idea64.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_clion",
+            "process": "clion64.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_pych",
+            "process": "pycharm64.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_wsl",
+            "process": "wsl.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_wscp",
+            "process": "WinSCP.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_pty",
+            "process": "putty.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_dock",
+            "process": "Docker Desktop.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_sys",
+            "process": "services.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_lsas",
+            "process": "lsass.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_svch",
+            "process": "svchost.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_winl",
+            "process": "winlogon.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_wininit",
+            "process": "wininit.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_csrs",
+            "process": "csrss.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_sms",
+            "process": "smss.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_task",
+            "process": "Taskmgr.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_conh",
+            "process": "conhost.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_dwm",
+            "process": "dwm.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "//": " 二、文件保护 — 常规文件操作放行 / 敏感操作拦截        "
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "action": 1,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_usr1",
+            "process": "*",
+            "process_exact": false,
+            "score": 15,
+            "target": "*\\important_data.db"
+        },
+        {
+            "action": 1,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_usr2",
+            "process": "*",
+            "process_exact": false,
+            "score": 15,
+            "target": "*\\config\\critical.json"
+        },
+        {
+            "action": 1,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_tmp_exe",
+            "process": "*",
+            "process_exact": false,
+            "score": 25,
+            "target": "*\\Temp\\*.exe"
+        },
+        {
+            "action": 1,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_tmp_dll",
+            "process": "*",
+            "process_exact": false,
+            "score": 25,
+            "target": "*\\Temp\\*.dll"
+        },
+        {
+            "action": 1,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_tmp_ps",
+            "process": "*",
+            "process_exact": false,
+            "score": 20,
+            "target": "*\\Temp\\*.ps1"
+        },
+        {
+            "action": 1,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_tmp_vbs",
+            "process": "*",
+            "process_exact": false,
+            "score": 20,
+            "target": "*\\Temp\\*.vbs"
+        },
+        {
+            "action": 1,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_startup",
+            "process": "*",
+            "process_exact": false,
+            "score": 35,
+            "target": "*\\Startup\\*.exe"
+        },
+        {
+            "action": 1,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_startup_lnk",
+            "process": "*",
+            "process_exact": false,
+            "score": 30,
+            "target": "*\\Startup\\*.lnk"
+        },
+        {
+            "action": 1,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_sys32_exe",
+            "process": "*",
+            "process_exact": false,
+            "score": 35,
+            "target": "*\\System32\\*.exe"
+        },
+        {
+            "action": 1,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_sys32_dll",
+            "process": "*",
+            "process_exact": false,
+            "score": 30,
+            "target": "*\\System32\\*.dll"
+        },
+        {
+            "//": "── Temp 目录白名单放在 Temp\\*.exe/dll/ps1/vbs 拦截规则之后 (P0-2) ──"
+        },
+        {
+            "action": 0,
+            "code": 2001,
+            "enabled": true,
+            "id": "def_file_usr3",
+            "process": "*",
+            "process_exact": false,
+            "score": 0,
+            "target": "*\\Temp\\*"
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "//": " 三、注册表保护 — 启动项 / IFEO / UAC / 安全中心等     "
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "action": 0,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_exp",
+            "process": "explorer.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mmc",
+            "process": "mmc.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_reg",
+            "process": "regedit.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 0,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_usr3",
+            "process": "*",
+            "process_exact": false,
+            "score": 0,
+            "target": "CurrentVersion\\Run\\KnownGood"
+        },
+        {
+            "action": 0,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_svch",
+            "process": "svchost.exe",
+            "process_exact": false,
+            "score": 0,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal1",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": "CurrentVersion\\Run"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal2",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": "CurrentVersion\\Run"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal3",
+            "process": "wscript.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": "CurrentVersion\\Run"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal4",
+            "process": "cscript.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": "CurrentVersion\\Run"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal5",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": "CurrentVersion\\RunOnce"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_pwsh_run",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": "CurrentVersion\\RunOnce"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal6",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "DisableAntiSpyware"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal7",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "DisableAntiSpyware"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal8",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": "EnableLUA"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal9",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": "EnableLUA"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal10",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": "DisableTaskMgr"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal11",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "Winlogon\\Shell"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal12",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "Winlogon\\Shell"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_mal13",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "Userinit"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_ifeo",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "Image File Execution Options"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_ifeo_pwsh",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "Image File Execution Options"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_ifeo_wscript",
+            "process": "wscript.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "Image File Execution Options"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_appinit",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "AppInit_DLLs"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_appinit_pwsh",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "AppInit_DLLs"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_defender",
+            "process": "*",
+            "process_exact": false,
+            "score": 40,
+            "target": "Windows Defender\\DisableAntiSpyware"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_tamper",
+            "process": "*",
+            "process_exact": false,
+            "score": 45,
+            "target": "TamperProtection"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_proxy_1",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": "ProxyEnable"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_proxy_2",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": "ProxyEnable"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_proxy_3",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": "ProxyServer"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_proxy_4",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": "ProxyServer"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_fw",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "EnableFirewall"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_fw2",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "EnableFirewall"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_bcd",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 40,
+            "target": "BCD00000000"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_bcd2",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 40,
+            "target": "BCD00000000"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_autologin",
+            "process": "*",
+            "process_exact": false,
+            "score": 25,
+            "target": "AutoAdminLogon"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_autologin2",
+            "process": "*",
+            "process_exact": false,
+            "score": 30,
+            "target": "DefaultPassword"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_service_path",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "Services\\*\\ImagePath"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_service_path_ps",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "Services\\*\\ImagePath"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_wmi",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "CIMOM"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_wmi2",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "CIMOM"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_pwsh_log",
+            "process": "*",
+            "process_exact": false,
+            "score": 30,
+            "target": "PowerShell\\ScriptBlockLogging"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_lsa_ppl",
+            "process": "*",
+            "process_exact": false,
+            "score": 40,
+            "target": "RunAsPPL"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_lsa_notif",
+            "process": "*",
+            "process_exact": false,
+            "score": 40,
+            "target": "Notification Packages"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_usb",
+            "process": "*",
+            "process_exact": false,
+            "score": 15,
+            "target": "NoDriveTypeAutoRun"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_usr1",
+            "process": "*",
+            "process_exact": false,
+            "score": 25,
+            "target": "CurrentVersion\\Run\\Malware"
+        },
+        {
+            "action": 1,
+            "code": 3001,
+            "enabled": true,
+            "id": "def_reg_usr2",
+            "process": "*",
+            "process_exact": false,
+            "score": 30,
+            "target": "CurrentControlSet\\Services\\*Suspicious*"
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "//": " 四、勒索软件防护                                    "
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_01",
+            "process": "wscript.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_02",
+            "process": "cscript.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_03",
+            "process": "mshta.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_04",
+            "process": "certutil.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_05",
+            "process": "bitsadmin.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_06",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "ProgramData"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_07",
+            "process": "rundll32.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": "*.tmp"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_08",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "*.exe"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_09",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "*.docx"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_10",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "*.xlsx"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_11",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "*.docx"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_12",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": "*.xlsx"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_13",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "*.pdf"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_14",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": "*.jpg"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_usr1",
+            "process": "*",
+            "process_exact": false,
+            "score": 25,
+            "target": "*.sqlite"
+        },
+        {
+            "action": 1,
+            "code": 5001,
+            "enabled": true,
+            "id": "def_ran_usr2",
+            "process": "*",
+            "process_exact": false,
+            "score": 30,
+            "target": "*.wallet"
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "//": " 五、代码注入 / LOLBins 滥用                         "
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_01",
+            "process": "rundll32.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_02",
+            "process": "regsvr32.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_03",
+            "process": "mshta.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_04",
+            "process": "mavinject.exe",
+            "process_exact": false,
+            "score": 35,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_05",
+            "process": "msbuild.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_06",
+            "process": "cscript.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_07",
+            "process": "wmic.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_08",
+            "process": "certutil.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_09",
+            "process": "bitsadmin.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_10",
+            "process": "reg.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_11",
+            "process": "sc.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_12",
+            "process": "net.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_13",
+            "process": "net1.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_14",
+            "process": "msiexec.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_15",
+            "process": "forfiles.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_16",
+            "process": "msdt.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_17",
+            "process": "hh.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_18",
+            "process": "diskshadow.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_19",
+            "process": "vssadmin.exe",
+            "process_exact": false,
+            "score": 30,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_20",
+            "process": "odbcconf.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_21",
+            "process": "cmstp.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_22",
+            "process": "regasm.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_23",
+            "process": "installutil.exe",
+            "process_exact": false,
+            "score": 25,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_24",
+            "process": "scriptrunner.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_25",
+            "process": "psexec.exe",
+            "process_exact": false,
+            "score": 40,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_26",
+            "process": "psExec.exe",
+            "process_exact": false,
+            "score": 40,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_usr1",
+            "process": "*\\python.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6001,
+            "enabled": true,
+            "id": "def_inj_usr2",
+            "process": "*\\node.exe",
+            "process_exact": false,
+            "score": 20,
+            "target": ""
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "//": " 六、银狐 (SilverFox) — 双签名 / 可疑释放            "
+        },
+        {
+            "//": "═══════════════════════════════════════════════════════"
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_01",
+            "process": "schtasks.exe",
+            "process_exact": false,
+            "score": 50,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_02",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 50,
+            "target": "schtasks"
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_03",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 50,
+            "target": "schtasks"
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_04",
+            "process": "wmic.exe",
+            "process_exact": false,
+            "score": 50,
+            "target": "schtasks"
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_05",
+            "process": "at.exe",
+            "process_exact": false,
+            "score": 45,
+            "target": ""
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_06",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 40,
+            "target": "*\\AppData\\*\\*.exe"
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_07",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 40,
+            "target": "*\\AppData\\*\\*.exe"
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_08",
+            "process": "wscript.exe",
+            "process_exact": false,
+            "score": 40,
+            "target": "*\\AppData\\*\\*.exe"
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_09",
+            "process": "cscript.exe",
+            "process_exact": false,
+            "score": 40,
+            "target": "*\\AppData\\*\\*.exe"
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_10",
+            "process": "powershell.exe",
+            "process_exact": false,
+            "score": 40,
+            "target": "*\\Temp\\*\\*.exe"
+        },
+        {
+            "action": 1,
+            "code": 6002,
+            "enabled": true,
+            "id": "def_sf_11",
+            "process": "cmd.exe",
+            "process_exact": false,
+            "score": 40,
+            "target": "*\\Temp\\*\\*.exe"
+        }
+    ],
+    "version": 1
+}

@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "comment": "状态机 HIPS 组装规则 - 用 Rules_Conditions.json 的条件组合成状态机规则。action: 0放行 1阻止 2询问 3重定向 4放行+事后修复。priority 越小越优先，豁免规则 priority=1。",
+  "rules": [
+    {
+      "id": "trusted_chain_allowed",
+      "name": "签名链操作豁免",
+      "action": 0,
+      "score": 0,
+      "priority": 1,
+      "when": {
+        "any": ["trusted_chain", "proc_signed"]
+      }
+    },
+    {
+      "id": "byovd_unsigned_loads_driver",
+      "name": "无签名进程加载驱动(BYOVD)",
+      "action": 2,
+      "score": 40,
+      "priority": 10,
+      "block_at": "image_load",
+      "when": {
+        "all": ["proc_unsigned", "evt_load_driver"]
+      },
+      "window_ms": 5000
+    },
+    {
+      "id": "script_drop_exec",
+      "name": "脚本宿主落盘执行",
+      "action": 2,
+      "score": 50,
+      "priority": 10,
+      "block_at": "file_write",
+      "when": {
+        "all": ["proc_script_host", "evt_write_pe", "evt_create_process"]
+      },
+      "window_ms": 10000
+    },
+    {
+      "id": "unsigned_temp_runkey",
+      "name": "无签名进程写Run键",
+      "action": 1,
+      "score": 35,
+      "priority": 10,
+      "block_at": "reg_write",
+      "when": {
+        "all": ["proc_unsigned", "evt_runkey_write"]
+      }
+    },
+    {
+      "id": "ransom_write_redirect",
+      "name": "勒索写入重定向(无签名进程释放PE)",
+      "action": 3,
+      "score": 30,
+      "priority": 10,
+      "reversibility": "partial",
+      "block_at": "file_write",
+      "redirect_to": "\\ProgramData\\ZETA\\Quarantine\\",
+      "when": {
+        "all": ["proc_unsigned", "evt_write_pe"]
+      }
+    }
+  ]
+}

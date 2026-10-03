@@ -1,0 +1,33 @@
+{
+    "//": "用户自定义规则 - 修改后重启驱动或重启系统生效",
+    "//": "格式和 Rules_Driver_P1.json 完全一致，这里的规则会和系统规则合并",
+    "//": "所有规则支持通配符: * 匹配任意字符",
+    "//": "P0-4 修复: 数组内 \"// xxx\" 字符串被当作规则元素处理，已移除",
+
+    "Rule_Registry_BlockList": [
+        "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\\Malware",
+        "*\\CurrentControlSet\\Services\\SomeSuspiciousService"
+    ],
+    "Rule_Registry_TrustedList": [
+        "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\\KnownGood"
+    ],
+    "Rule_Process_TrustedPaths": [
+        "*\\Program Files\\MyCustomApp\\*",
+        "*\\Users\\*\\.custom-tools\\*"
+    ],
+    "Rule_Process_ExploitableBlacklist": [
+        "*\\python.exe",
+        "*\\node.exe"
+    ],
+    "Rule_File_ProtectedPaths": [
+        "*\\important_data.db",
+        "*\\config\\critical.json"
+    ],
+    "Rule_File_ExceptionPaths": [
+        "*\\Temp\\*"
+    ],
+    "Rule_File_RansomwareExtensions": [
+        ".sqlite",
+        ".wallet"
+    ]
+}

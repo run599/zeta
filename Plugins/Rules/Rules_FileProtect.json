@@ -1,0 +1,12 @@
+{
+    "//": "ZETA 文件保护专项规则 (独立于 Rules_Driver_P1.json / Rules_User.json)。",
+    "//2": "当前仅驱动文档写前备份(DocBackup)使用: 命中扩展名的覆盖写前先留旧版。",
+    "//3": "条目一律 '.小写扩展名' 格式; 本文件缺失时驱动回退内置默认表。",
+    "Rule_File_DocBackup_Extensions": [
+        ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+        ".pdf", ".txt", ".rtf", ".md", ".odt", ".csv",
+        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".heic",
+        ".psd", ".ai",
+        ".db", ".sqlite"
+    ]
+}

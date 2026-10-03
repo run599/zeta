@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B8F7E3A1-3D5E-4F9F-9B7C-6D4E2F8A3B1C}</ProjectGuid>
+    <TemplateGuid>{1b2f6b3c-6f8d-4a0b-9e7d-9e1e9f3b4d5e}</TemplateGuid>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <MinimumVisualStudioVersion>15.0</MinimumVisualStudioVersion>
+    <Configuration>Release</Configuration>
+    <Platform>x64</Platform>
+    <RootNamespace>ZETA_DiskFilter</RootNamespace>
+    <ProjectName>ZETA_DiskFilter</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+    <DriverTargetType>Desktop</DriverTargetType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <DriverClean>false</DriverClean>
+      <Driver_SpectreMitigation>false</Driver_SpectreMitigation>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(ProjectDir)</OutDir>
+    <IntDir>$(ProjectDir)x64\Release\DiskFilter\</IntDir>
+    <TargetName>ZETA_DiskFilter</TargetName>
+    <TargetExt>.sys</TargetExt>
+    <SignMode>Off</SignMode>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalOptions>/kernel %(AdditionalOptions)</AdditionalOptions>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <StringPooling>true</StringPooling>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <ExceptionHandling>false</ExceptionHandling>
+      <ControlFlowGuard>Guard</ControlFlowGuard>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <LanguageStandard_C>Default</LanguageStandard_C>
+      <CompileAs>CompileAsC</CompileAs>
+      <!-- 符号表留在中间目录, 不再随 OutDir(=ProjectDir, 即运行时/发布目录) 外发 -->
+      <ProgramDataBaseFileName>$(IntDir)ZETA_DiskFilter.pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <!-- 构建事件必须放在 ItemDefinitionGroup 内 (写成 PropertyGroup 时
+         %(PostBuildEvent.Command) 为空, 旧工程因此从未真正签名) -->
+    <PostBuildEvent>
+      <Message>Signing ZETA_DiskFilter.sys (ZETA test certificate)</Message>
+      <!-- 单行命令: 本工程文件为 LF 换行, 多行 cmd 会被逐行拆散导致签名失败 -->
+      <Command>if exist "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe" ("C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe" sign /fd sha256 /sha1 340E9FFBE504FBA88F454F84CCCF8B4B40A95D68 /s My "$(TargetPath)") else ("C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\signtool.exe" sign /fd sha256 /sha1 340E9FFBE504FBA88F454F84CCCF8B4B40A95D68 /s My "$(TargetPath)")</Command>
+    </PostBuildEvent>
+    <Link>
+      <!-- wdmsec.lib: 源码用 IoCreateDeviceSecure + SDDL_DEVOBJ_SYS_ALL_ADM_ALL 建控制设备,
+           缺此库会 LNK2019 (旧 Lite 工程无控制设备, 故从未需要) -->
+      <AdditionalDependencies>ntoskrnl.lib;hal.lib;BufferOverflowFastFailK.lib;wdmsec.lib</AdditionalDependencies>
+      <AdditionalOptions>/NODEFAULTLIB /SECTION:INIT,d %(AdditionalOptions)</AdditionalOptions>
+      <SubSystem>Native</SubSystem>
+      <EntryPointSymbol>DriverEntry</EntryPointSymbol>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <!-- 保留调试信息(true): 该驱动历史上出过蓝屏(如 0xCE/0x7E), 需要用 dump 定位 -->
+      <!-- 链接器默认把 pdb 写到 OutDir(=ProjectDir, 即运行时/发布目录), 这里改到中间目录 -->
+      <ProgramDatabaseFile>$(IntDir)ZETA_DiskFilter.pdb</ProgramDatabaseFile>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="ZETA_DiskFilter.c" />
+  </ItemGroup>
+  <PropertyGroup>
+    <InfVerifOff>true</InfVerifOff>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

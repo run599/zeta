@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{699C79A8-A904-1976-F72A-CDD7E811CFD2}</ProjectGuid>
+    <TemplateGuid>{dd38f7fc-d7bd-488b-9242-7d8754cde80d}</TemplateGuid>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
+    <Configuration>Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <RootNamespace>ZETA_Driver</RootNamespace>
+    <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+    <Driver_SpectreMitigation>false</Driver_SpectreMitigation>
+    <TargetName>ZETA_Drv</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+    <Driver_SpectreMitigation>false</Driver_SpectreMitigation>
+    <TargetName>ZETA_Drv</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+    <EnableInf2cat>false</EnableInf2cat>
+    <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
+    <OutDir>$(ProjectDir)</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+    <EnableInf2cat>false</EnableInf2cat>
+    <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
+    <SignMode>Off</SignMode>
+    <InfVerifOff>true</InfVerifOff>
+    <OutDir>$(ProjectDir)</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <!-- ── SSDT 开关 (2026-09-30 起默认关闭) ──────────────────────────────────
+       ZETA_ENABLE_SSDT = 0 (默认): ApcHook.cpp / InjectHook.cpp 整文件空编;
+                                    DriverEntry 中 19/20/22/24 号命令分支走 #else
+                                    (仅记日志, 不装 hook); PendingOps 的
+                                    ApcHook_CheckTimeouts 与 watchdog 的 SSDT
+                                    表项自检一并剔除 → 可过 HVCI/PatchGuard。
+       ZETA_ENABLE_SSDT = 1        : 恢复 SSDT 打表(需测试模式, 自担 PatchGuard 风险)。
+       关闭原因: ① PatchGuard 校验 KiServiceTable → 0x109 定时炸弹;
+                 ② 注入/APC 两个 hook 的拦截条件已被 Ob 回调在句柄层提前覆盖(冗余);
+                 ③ UnloadGuard 实测无效(sc stop 不走 NtUnloadDriver)。
+       覆盖方式: msbuild /p:ZetaEnableSsdt=1   (x64/ARM64 全配置生效)
+       历史坑: 此前本工程显式声明默认 1, 且 DriverCommon.h 兜底为 1, 导致
+               "Lite 版"实际编入完整 SSDT 代码, 19/20/22/24 号命令可被任何能打开
+               控制端口的调用方激活。现两侧默认值统一为 0。 -->
+  <PropertyGroup>
+    <ZetaEnableSsdt Condition="'$(ZetaEnableSsdt)' == ''">0</ZetaEnableSsdt>
+  </PropertyGroup>
+  <!-- ── BAM 注册表拦截开关 (2026-10-03) ────────────────────────────────────
+       用于定案 "cmd /c cmd /c ... 子进程从创建起即 Suspended 且永不恢复" 的成因。
+       ZetaBamBlock = 1 (默认, 生产值): 对 *\Services\bam\* 的写入返回 ACCESS_DENIED
+       ZetaBamBlock = 0 (实验值)       : 只上报 ZETA_MSG_REG_BAM, 不改写 NTSTATUS
+       实验构建: msbuild Plugins\Filter\ZETA_Driver.vcxproj /p:Configuration=Release
+                        /p:Platform=x64 /p:ZetaBamBlock=0
+       ⚠ 实验结束后用默认值(不带 /p:ZetaBamBlock)重编, 否则 BAM 拦截实际失效。 -->
+  <PropertyGroup>
+    <ZetaBamBlock Condition="'$(ZetaBamBlock)' == ''">1</ZetaBamBlock>
+  </PropertyGroup>
+  <!-- ── PendingOps 开关 (2026-10-03) ──────────────────────────────────────
+       ZetaTestNoPend = 1: PendOperation 一律返回 STATUS_NOT_SUPPORTED (调用方直接放行)。
+       用途: 定案 "cmd 创建子进程 → 子进程初始线程永挂起" 是否由"待决操作挂起"引起。
+       实验构建: msbuild Plugins\Filter\ZETA_Driver.vcxproj /p:Configuration=Release
+                        /p:Platform=x64 /p:ZetaTestNoPend=1
+       ⚠ 实验后必须用默认值(不带该参数)重编。 -->
+  <PropertyGroup>
+    <ZetaTestNoPend Condition="'$(ZetaTestNoPend)' == ''">0</ZetaTestNoPend>
+  </PropertyGroup>
+  <!-- ── 进程创建通知上报开关 (2026-10-03) ────────────────────────────────
+       ZetaNoCreateMsg = 1: ProcessCreateNotifyEx 不再向用户态发 PROCESS_CREATE/EXIT。
+       用途: 区分 "创建路径上的用户态上报" 与 "仅连接期存在的 Ob 句柄回调 / DKOM"。
+       实验构建: msbuild Plugins\Filter\ZETA_Driver.vcxproj /p:Configuration=Release
+                        /p:Platform=x64 /p:ZetaNoCreateMsg=1
+       ⚠ 实验后必须用默认值重编。 -->
+  <PropertyGroup>
+    <ZetaNoCreateMsg Condition="'$(ZetaNoCreateMsg)' == ''">0</ZetaNoCreateMsg>
+  </PropertyGroup>
+  <!-- ── 线程创建通知上报开关 (2026-10-03) ────────────────────────────────
+       ZetaNoThreadMsg = 1: ThreadNotifyRoutine 不再向用户态发 THREAD_CREATE。
+       用途: 该回调在 NtCreateUserProcess 内部、初始线程尚未恢复时运行, 是
+             "新进程初始线程永久悬挂" 的最可疑来源。
+       实验构建: msbuild Plugins\Filter\ZETA_Driver.vcxproj /p:Configuration=Release
+                        /p:Platform=x64 /p:ZetaNoThreadMsg=1
+       ⚠ 实验后必须用默认值重编。 -->
+  <PropertyGroup>
+    <ZetaNoThreadMsg Condition="'$(ZetaNoThreadMsg)' == ''">0</ZetaNoThreadMsg>
+  </PropertyGroup>
+  <!-- ── Ob 句柄回调开关 (2026-10-03) ────────────────────────────────────
+       ZetaNoObProtect = 1: PortConnect 时不再注册 ObRegisterCallbacks。
+       用途: 隔离"仅在客户端连接后存在"的最后一个可疑机制。
+       实验构建: msbuild Plugins\Filter\ZETA_Driver.vcxproj /p:Configuration=Release
+                        /p:Platform=x64 /p:ZetaNoObProtect=1
+       ⚠ 实验后必须用默认值重编; 该开关会同时关闭 ZETA.exe 自保护。 -->
+  <PropertyGroup>
+    <ZetaNoObProtect Condition="'$(ZetaNoObProtect)' == ''">0</ZetaNoObProtect>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>ZETA_ENABLE_SSDT=$(ZetaEnableSsdt);ZETA_BAM_BLOCK_ENABLED=$(ZetaBamBlock);ZETA_TEST_NO_PEND=$(ZetaTestNoPend);ZETA_TEST_NO_CREATE_MSG=$(ZetaNoCreateMsg);ZETA_TEST_NO_THREAD_MSG=$(ZetaNoThreadMsg);ZETA_TEST_NO_OB_PROTECT=$(ZetaNoObProtect);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <!-- ── 规则门禁 (第 4 步, 2026-09-30): 构建后跑 RuleLint 静态校验 ────────────
+       背景: 规则优先级此前藏在代码执行顺序里, 冲突完全不可见(改一条 JSON 可能静默
+             翻转全局行为)。本 Target 把"冲突不可见"变成"构建即报"。
+       语义: 棘轮式 —— 只拦**新增**冲突/死规则; 现存基线照常通过(基线本身就有 8 条)。
+       关闭: msbuild /p:ZetaRuleLint=0
+       ⚠ 脚本在 python 缺失时返回 0(不阻塞构建) —— 缺工具链不该挡住驱动编译。 -->
+  <PropertyGroup>
+    <ZetaRuleLint Condition="'$(ZetaRuleLint)' == ''">1</ZetaRuleLint>
+  </PropertyGroup>
+  <Target Name="RuleLintGate" AfterTargets="Build" Condition="'$(ZetaRuleLint)' == '1'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\_test-bin\rulelint-gate.ps1&quot;"
+          IgnoreExitCode="false" />
+  </Target>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+      <CertificateThumbprint>EB2E6724363E4FA6C14982CD0FAF4B944D909223</CertificateThumbprint>
+      <TimeStamp>http://timestamp.digicert.com</TimeStamp>
+    </DriverSign>
+    <ClCompile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(DDK_LIB_PATH)fltmgr.lib;$(DDK_LIB_PATH)cng.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(DDK_LIB_PATH)fltmgr.lib;$(DDK_LIB_PATH)cng.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <!-- 相对定位签名脚本 (仓库根 = $(ProjectDir)..\..\..), 换成别处运行时不会静默失败:
+           脚本缺失时明确提示跳过签名, 而不是让构建报一句看不出原因的错。 -->
+      <Command>if exist "$(ProjectDir)..\..\..\sign_driver_py.py" (python -u "$(ProjectDir)..\..\..\sign_driver_py.py" "$(TargetPath)") else (echo [build] sign_driver_py.py not found - skipped driver signing)</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <!-- INF verification disabled: InfVerif.exe 32/64-bit mismatch (0x8007000B) -->
+    <!-- INF file kept on disk for deployment: ZETA_Driver.inf -->
+  </ItemGroup>
+  <ItemGroup>
+    <FilesToPackage Include="$(TargetPath)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="DriverCommon.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="DriverEntry.cpp" />
+    <ClCompile Include="ApcHook.cpp" />
+    <ClCompile Include="InjectHook.cpp" />
+    <ClCompile Include="ProtectBoot.cpp" />
+    <ClCompile Include="ProtectFile.cpp" />
+    <ClCompile Include="ProtectProcess.cpp" />
+    <ClCompile Include="ProtectProcessDkom.cpp" />
+    <ClCompile Include="ProtectRegistry.cpp" />
+    
+    <ClCompile Include="ProtectRules.cpp" />
+    <ClCompile Include="PendingOps.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

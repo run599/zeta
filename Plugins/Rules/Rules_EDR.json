@@ -1,0 +1,81 @@
+{
+    "//": "EDR 引擎通过多个检测维度综合评分，超过阈值则判定为威胁",
+    "//Rule_Yara_Paths_WARNING": "2026-10-03: 原始值是 Plugins/Rules/YARA/*.yar, 但 scanner.cpp:693 会做 rulesDir + '\\\\' + 该值, 导致拼成 ...\\Plugins\\Rules\\Plugins/Rules/YARA/*.yar, pathIsDirectory 恒为 false => YARA 规则从未被加载(也就从未触发扫描)。改成 'YARA\\\\*.yar' 可以让规则真正加载, 但实测 ZETA.exe 会在启动约 10 秒后、首次扫描时崩溃(ZETA_Engine.dll+0x7486, 0xC0000005), 且只用原有 10 条规则也照样崩 => 崩溃是引擎扫描路径自身的老缺陷, 与规则集无关, 必须先修引擎再启用。",
+    "Rule_Pe_HighRiskApis": [
+        "CreateRemoteThread",
+        "WriteProcessMemory",
+        "VirtualAllocEx",
+        "SetWindowsHookEx",
+        "GetAsyncKeyState",
+        "keybd_event",
+        "SendInput",
+        "NtCreateProcess",
+        "NtUnmapViewOfSection"
+    ],
+    "Rule_Pe_SuspiciousApis": [
+        "VirtualAlloc",
+        "VirtualProtect",
+        "WriteProcessMemory",
+        "CreateRemoteThread",
+        "ShellExecute",
+        "WinExec",
+        "CreateProcess",
+        "URLDownloadToFile",
+        "DeleteFile",
+        "RegCreateKeyEx",
+        "RegSetValueEx",
+        "GetProcAddress",
+        "LoadLibrary",
+        "ExitProcess"
+    ],
+    "Rule_Pe_SuspiciousSections": [
+        ".upx",
+        ".pack",
+        ".themida",
+        ".vmp",
+        ".aspack",
+        ".nsp0",
+        ".nsp1",
+        ".nsp2",
+        ".mackt",
+        ".kpack",
+        ".winapi"
+    ],
+    "Rule_Scanning_Enabled": {
+        "enable_pe_heuristics": true,
+        "enable_signature_check": true,
+        "enable_yara": true
+    },
+    "Rule_Scoring": {
+        "high_entropy_score": 25,
+        "high_risk_api_score": 30,
+        "high_threat_threshold": 70,
+        "no_entry_point_score": 10,
+        "rwx_section_score": 20,
+        "suspicious_api_score": 10,
+        "suspicious_section_score": 30,
+        "threat_threshold": 50,
+        "unsigned_score": 20,
+        "yara_match_score": 100
+    },
+    "Rule_Signature_RequiredExtensions": [
+        ".exe",
+        ".dll",
+        ".scr",
+        ".sys",
+        ".msi",
+        ".cab"
+    ],
+    "Rule_Signature_TrustedPublishers": [
+        "Microsoft Corporation",
+        "Google LLC",
+        "Mozilla Corporation",
+        "Apple Inc.",
+        "Oracle Corporation",
+        "Adobe Inc.",
+        "Intel Corporation"
+    ],
+    "Rule_Yara_Paths": [
+        "YARA\\*.yar"
+    ]
+}

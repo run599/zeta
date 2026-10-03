@@ -1,0 +1,52 @@
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = ActivityMonitor
+ClassGuid   = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}
+Provider    = %ManufacturerName%
+DriverVer = 08/25/2026,7.49.7.903
+CatalogFile = ZETA_Drv.cat
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir          = 12
+ZETA_Drv.DriverFiles = 12
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+ZETA_Drv.sys = 1,,
+
+[DefaultInstall.NTamd64]
+OptionDesc = %ServiceDescription%
+CopyFiles  = ZETA_Drv.DriverFiles
+
+[DefaultInstall.NTamd64.Services]
+AddService = %ServiceName%,,ZETA_Drv.Service
+
+[ZETA_Drv.DriverFiles]
+ZETA_Drv.sys
+
+[ZETA_Drv.Service]
+DisplayName      = %ServiceName%
+Description      = %ServiceDescription%
+ServiceBinary    = %12%\ZETA_Drv.sys
+Dependencies     = FltMgr
+ServiceType      = 2
+StartType        = 3
+ErrorControl     = 1
+LoadOrderGroup   = "FSFilter Activity Monitor"
+AddReg           = ZETA_Drv.AddReg
+
+[ZETA_Drv.AddReg]
+HKR,"Parameters","DebugFlags",0x00010001,0x0
+HKR,"Parameters","SupportedFeatures",0x00010001,0x3
+HKR,"Parameters\Instances","DefaultInstance",0x00000000,"ZETA Instance"
+HKR,"Parameters\Instances\ZETA Instance","Altitude",0x00000000,"320000"
+HKR,"Parameters\Instances\ZETA Instance","Flags",0x00010001,0x0
+
+[Strings]
+ManufacturerName   = "ZETA Security"
+DiskName           = "ZETA_Driver Source Disk"
+ServiceName        = "ZETA_Driver"
+ServiceDescription = "ZETA Security Driver"

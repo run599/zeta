@@ -242,7 +242,21 @@ static OB_PREOP_CALLBACK_STATUS PreOpenProcess(PVOID RegistrationContext, POB_PR
 
   if (bIsTrusted) return OB_PREOP_SUCCESS;
 
-  DbgPrint("ZETA: Process BLOCKED access by PID=%lu to TargetPID=%lu",
+  // ── 父子豁免 (2026-10-04, 修"创建链永久冻结") ──────────────────────
+ // Windows 会让某些子进程以 SUSPENDED 状态创建，父进程随后用 CreateProcess
+ // 返回的 hThread 调 ResumeThread 放行它（net.exe→net1.exe、cmd 管道→子 cmd、
+ // vcvars64.bat→vswhere.exe 全是这个形状）。若下面把 PROCESS_SUSPEND_RESUME /
+ // THREAD_SUSPEND_RESUME 剥掉，父进程的 ResumeThread 会 ACCESS_DENIED，子进程
+ // 永久停在 Suspended，父进程永久等它 ⇒ 整条创建链冻结（且不含任何超时，故表
+ // 现为"永久"）。**进程必须始终对"自己刚创建的子进程/线程"保有完整权限。**
+ if ((ULONG)(ULONG_PTR)PsGetProcessInheritedFromUniqueProcessId(TargetProcess)
+     == (ULONG)(ULONG_PTR)SourcePid) {
+  DbgPrint("ZETA: parent-child exemption (parent PID=%lu, target PID=%lu) - no access strip\n",
+           (ULONG)(ULONG_PTR)SourcePid, (ULONG)(ULONG_PTR)TargetPid);
+  return OB_PREOP_SUCCESS;
+ }
+
+ DbgPrint("ZETA: Process BLOCKED access by PID=%lu to TargetPID=%lu",
            (ULONG)(ULONG_PTR)SourcePid, (ULONG)(ULONG_PTR)TargetPid);
 
   ACCESS_MASK DenyMask = PROCESS_TERMINATE |
@@ -312,6 +326,16 @@ static OB_PREOP_CALLBACK_STATUS PreOpenThread(PVOID RegistrationContext, POB_PRE
  }
 
  if (bIsTrusted) return OB_PREOP_SUCCESS;
+
+ // ── 父子豁免 (2026-10-04, 同 PreOpenProcess) ────────────────────────
+ // 父进程必须能恢复/初始化自己创建的线程；剥掉 THREAD_SUSPEND_RESUME 会让
+ // 父进程的 ResumeThread 失败，子进程永久 Suspended，父进程永久等待。
+ if ((ULONG)(ULONG_PTR)PsGetProcessInheritedFromUniqueProcessId(TargetProcess)
+     == (ULONG)(ULONG_PTR)SourcePid) {
+  DbgPrint("ZETA: parent-child exemption (thread; parent PID=%lu, target PID=%lu) - no access strip\n",
+           (ULONG)(ULONG_PTR)SourcePid, (ULONG)(ULONG_PTR)TargetPid);
+  return OB_PREOP_SUCCESS;
+ }
 
  ACCESS_MASK DenyMask = THREAD_TERMINATE |
  THREAD_SUSPEND_RESUME |

@@ -359,11 +359,19 @@ struct ContextScoreConfig {
 //   ⇒ 告警只能来自"多档证据组合"或"高置信签名", 而不是"某条弱规则恰好
 //     在某个正常软件上命中"。这就是交叉表决。
 // ============================================================
+// 编译期【默认值】(2026-10-06 起可由 Rules_EDR.json 的 Rule_Scoring 覆盖)。
+// 保留 constexpr 的用途：① 运行时配置缺省时的兜底；② static_assert 继续锁死"默认行为"安全。
+// 用户覆盖后由 YaraScoreRuntime::validate() 运行时校验并告警。
+//
+// 默认值为何调低(2026-10-06)：社区规则集"普通档"有 6689 条，其中大量是能力型
+// (DebuggerCheck__* / antivm_vmware / CRC32_table)。旧默认 NORMAL_CAP=90 ⇒ 正常程序
+// 凑够 3 条普通规则即越 ALERT(85) ⇒ 误报风暴。新默认让纯 YARA 证据无法独自越阈：
+//   弱18 + 普通3 = min(18*5,15) + min(3*20,35) = 15 + 35 = 50（< ALERT 85）
 struct YaraScoreConfig {
-    static constexpr int WEAK_PER_HIT   = 10;
-    static constexpr int WEAK_CAP       = 30;
-    static constexpr int NORMAL_PER_HIT = 45;
-    static constexpr int NORMAL_CAP     = 90;
+    static constexpr int WEAK_PER_HIT   = 5;
+    static constexpr int WEAK_CAP       = 15;
+    static constexpr int NORMAL_PER_HIT = 20;
+    static constexpr int NORMAL_CAP     = 35;
     static constexpr int STRONG_PER_HIT = 100;
     // 非 YARA 的"结构证据"(未签名 / 扩展名风险 / 路径编码异常)单发分值。
     // 刻意低于 WARN_THRESHOLD: 本机实测 TextInputHost.exe / esbuild.exe /
@@ -371,6 +379,24 @@ struct YaraScoreConfig {
     // (旧实现把这类结果按 1→50 分处理, 已经在提醒)。它应当只作为"可与其它证据
     // 叠加的一分证据", 单独出现时不打扰用户。
     static constexpr int STRUCTURAL_SUSPICIOUS = 20;
+};
+
+// ── YARA 评分的【运行时生效值】(2026-10-06) ──────────────────────────────
+// 由 ProcessBehaviorEngine::loadYaraScoreConfig(Rules_EDR.json) 从 Rule_Scoring 读取，
+// 让用户无需改代码即可调权重。缺省或文件缺失时保持上面的 constexpr 默认值。
+// 与 Rules_Context.json 的 ContextScoreConfig 是同一套做法(见 loadContextConfig)。
+struct YaraScoreRuntime {
+    int weakPerHit           = YaraScoreConfig::WEAK_PER_HIT;
+    int weakCap              = YaraScoreConfig::WEAK_CAP;
+    int normalPerHit         = YaraScoreConfig::NORMAL_PER_HIT;
+    int normalCap            = YaraScoreConfig::NORMAL_CAP;
+    int strongPerHit         = YaraScoreConfig::STRONG_PER_HIT;
+    int structuralSuspicious = YaraScoreConfig::STRUCTURAL_SUSPICIOUS;
+
+    // 运行时不变式校验(编译期只保证默认值；用户改坏时返回 false 并给出原因)。
+    // 阈值由调用方传入 —— 它们原本是 ProcessBehaviorEngine 的 private 静态成员，
+    // 自由函数取不到；传参既能复用同一套契约，也不必把它们提成全局。
+    bool validate(int warnThreshold, int alertThreshold, std::wstring* err) const;
 };
 
 // ============================================================
@@ -446,6 +472,12 @@ public:
     void setSelfPid(unsigned long pid) { m_selfPid = pid; }
     bool isSelf(unsigned long pid) const { return m_selfPid != 0 && pid == m_selfPid; }
 
+    // M2-3 补漏 (2026-10-05): "注入者是自身" 的豁免计数。
+    // 7008 远程线程事件的 evt.pid 是【受害者】、注入者只在 path 里，所以入口的
+    // isSelf(evt.pid) 拦不住我们自己的 TLS 截获注入器；该豁免在 7008 分支按注入者判定。
+    // 暴露计数是为了让这条豁免**可被观测**（否则又是一处静默行为）。
+    int getSelfInjectorExemptCount() const { return m_selfInjectorExempt.load(); }
+
     bool isEngineEnabled() const { return m_enabled; }
     void setEnabled(bool en) { m_enabled = en; }
 
@@ -496,6 +528,9 @@ public:
     // 加载后覆盖 scoreWithContext/ctxBonus/sequence 的默认权值。
     // 文件缺失或字段缺省时保持代码默认值 (行为不变)。
     void loadContextConfig(const std::wstring& path);
+    // 2026-10-06: YARA 证据权重(Rules_EDR.json 的 Rule_Scoring)，与上面同一套解析风格。
+    // warnOut 非空时写入"违反不变式"的说明(供调用方用 appLog 记录)；不打断运行。
+    void loadYaraScoreConfig(const std::wstring& path, std::wstring* warnOut = nullptr);
     const ContextScoreConfig& contextConfig() const { return m_cfg; }
     // 状态机命中回调 (由 main.cpp 设置, 用于按 block_at 处置)
     // M1-2: 扩展透传 block_at / redirect_to / window_ms, 供处置侧区分拦截位置。
@@ -554,6 +589,8 @@ private:
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_enabled{true};
     std::atomic<unsigned long> m_selfPid{0};  // P0-自杀修复: ZETA.exe 自身 PID
+    // M2-3 补漏: "注入者是自身" 的豁免次数（诊断用，见 getSelfInjectorExemptCount）
+    std::atomic<int> m_selfInjectorExempt{0};
 
     // ── Callbacks (called from worker thread) ──
     AlertCallback m_alertCallback = nullptr;
@@ -574,6 +611,7 @@ private:
 
     // ── 第4层上下文评分配置 (Rules_Context.json) ──
     ContextScoreConfig m_cfg;
+    YaraScoreRuntime   m_yaraScore;   // 2026-10-06: JSON 可调的 YARA 权重
 
     // ── Constants ──
     static constexpr int ALERT_THRESHOLD = 85;    // EDR 累计到 85分 → 弹窗 + 杀进程
@@ -598,8 +636,12 @@ private:
                   "弱档累计上限必须 < WARN_THRESHOLD: 否则纯能力型规则又能独自触发提醒(误报根因)");
     static_assert(YaraScoreConfig::NORMAL_PER_HIT < ALERT_THRESHOLD,
                   "单条普通规则不得独自越过 ALERT_THRESHOLD: 否则等于回到'命中即告警'");
-    static_assert(YaraScoreConfig::NORMAL_CAP >= ALERT_THRESHOLD,
-                  "两条普通规则应当能告警, 否则真检测会被过度削弱");
+    // 2026-10-06 契约变更：原为 "NORMAL_CAP >= ALERT_THRESHOLD(两条普通规则应当能告警)"，
+    // 但社区规则集的普通档含大量能力型规则(DebuggerCheck__*/antivm_* 等)，该契约
+    // 使正常程序凑 3 条即越阈 ⇒ 改为"普通档单独不得越阈"，纯 YARA 证据只能与其它
+    // 证据叠加才告警(用户仍可在 JSON 里调回，运行时 validate() 会提示)。
+    static_assert(YaraScoreConfig::NORMAL_CAP < ALERT_THRESHOLD,
+                  "普通档累计必须 < ALERT_THRESHOLD: 否则能力型普通规则组合命中正常程序即误报");
     static_assert(YaraScoreConfig::STRONG_PER_HIT >= ALERT_THRESHOLD,
                   "高置信签名必须单发即告警, 否则会漏掉真正的家族签名");
     static_assert(YaraScoreConfig::STRUCTURAL_SUSPICIOUS < WARN_THRESHOLD,

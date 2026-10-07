@@ -354,7 +354,10 @@ void ProcessBehaviorEngine::processEvent(const BehaviorEvent& evt) {
         }
         bool trustedByKernel = (evt.ctx.trustLevel >= 3);
         bool trustedByPath = isSignedProcess(trustedCheckPath);
-        bool isTrusted = trustedByKernel || trustedByPath;
+        // M2-3 补漏: 注入者是我方(ZETA.exe 的 TLS 截获注入器) ⇒ 不是攻击性注入，按可信处理。
+        // 否则我方合法注入会让被注入进程落进"无签名注入者"惩罚路径（信任门 + 7008 评分双层）。
+        const bool injectorIsSelf = (injectorPid != 0 && isSelf(injectorPid));
+        bool isTrusted = trustedByKernel || trustedByPath || injectorIsSelf;
 
         // ── P1-4: 硬闸门判定 — 三类行为任何信任等级都不豁免 ──
         // 原实现: 可信进程整体 return → 恶意软件放入可信目录/伪装签名即评分完全隐身。
@@ -908,11 +911,13 @@ void ProcessBehaviorEngine::reportScanEvidence(unsigned long pid, int scanCode,
             nNormal = 0;
             nStrong = 1;
         }
-        const int nWeakPart   = (nWeak * YaraScoreConfig::WEAK_PER_HIT > YaraScoreConfig::WEAK_CAP)
-                              ? YaraScoreConfig::WEAK_CAP : nWeak * YaraScoreConfig::WEAK_PER_HIT;
-        const int nNormalPart = (nNormal * YaraScoreConfig::NORMAL_PER_HIT > YaraScoreConfig::NORMAL_CAP)
-                              ? YaraScoreConfig::NORMAL_CAP : nNormal * YaraScoreConfig::NORMAL_PER_HIT;
-        score = nWeakPart + nNormalPart + nStrong * YaraScoreConfig::STRONG_PER_HIT;
+        // 2026-10-06: 权重改从 m_yaraScore 取(JSON 可调)，不再是编译期常量。
+        // 默认值见 YaraScoreConfig；用户可在 Rules_EDR.json 的 Rule_Scoring 覆盖。
+        const int nWeakPart   = (nWeak * m_yaraScore.weakPerHit > m_yaraScore.weakCap)
+                              ? m_yaraScore.weakCap : nWeak * m_yaraScore.weakPerHit;
+        const int nNormalPart = (nNormal * m_yaraScore.normalPerHit > m_yaraScore.normalCap)
+                              ? m_yaraScore.normalCap : nNormal * m_yaraScore.normalPerHit;
+        score = nWeakPart + nNormalPart + nStrong * m_yaraScore.strongPerHit;
         reason = L"YARA 证据 [" + name + L"] 弱" + std::to_wstring(nWeak) +
                  L"/普通" + std::to_wstring(nNormal) +
                  L"/强" + std::to_wstring(nStrong) +
@@ -920,8 +925,8 @@ void ProcessBehaviorEngine::reportScanEvidence(unsigned long pid, int scanCode,
     } else {
         // 结构证据: PE 高危(引擎已按多信号累积算过)保留告警能力;
         // 其余(未签名/扩展名/路径编码异常)只记 20 分, 不提醒、不告警。
-        score = (scanCode >= 3) ? YaraScoreConfig::STRONG_PER_HIT
-                                : YaraScoreConfig::STRUCTURAL_SUSPICIOUS;
+        score = (scanCode >= 3) ? m_yaraScore.strongPerHit
+                                : m_yaraScore.structuralSuspicious;
         reason = L"扫描结构证据 [" + name + L"] " +
                  (scanCode >= 3 ? std::wstring(L"高危") : std::wstring(L"可疑")) +
                  L" [" + detail + L"] [+" + std::to_wstring(score) + L"分]";
@@ -1270,6 +1275,31 @@ int ProcessBehaviorEngine::scoreWithContext(const BehaviorEvent& evt, ProcessPro
             //   远程线程注入后注入者立即退出是常见现象, 此时无法验证签名。
             //   正确降级: 无法验证 → 回到基础分(低危), 不加注入加分, 避免误伤受害者。
             unsigned long inj = getInjectorPid(ZETA_MSG_THREAD_CREATE, path);
+
+            // ── M2-3 补漏 (2026-10-05): "注入者是自身" → 不给受害者记分 ─────────────
+            // 场景: ZETA.exe 的 TLS 明文截获注入器用 CreateRemoteThread(LoadLibraryW)
+            //   把 ZETA_TlsInt.dll 注入目标进程。这是**我方合法行为**，但驱动按通用规则
+            //   发 7008 (path="pid,tid,R,creatorPid")。
+            // 为什么入口的 isSelf(evt.pid) 拦不住: 7008 的 evt.pid 是【受害者】，
+            //   注入者只能从 path 解析；而 ZETA.exe **未签名**、安装目录也不在
+            //   TrustRules.json 的 trusted_prefixes 里 ⇒ 会落到下面的 `return base;`
+            //   (= threadCreateBase 5 + remoteThread 15 = 20 分)，把"未签名注入者的
+            //   远程线程注入"记在**无辜受害者**头上。叠加到 ALERT_THRESHOLD(85，
+            //   注释即"弹窗 + 杀进程") 会误杀刚被注入的进程（explorer/msedge/svchost
+            //   都是候选）；比例也错——合法注入本应只得 injectorTrustedRemote(5) 分。
+            // 日志刻意带"本应加的分"，使这条豁免**可被观测**，而不是又一处静默行为。
+            if (isSelf(inj)) {
+                const int n = ++m_selfInjectorExempt;
+                if (n <= 3 || (n % 100) == 0) {
+                    // fflush 必需: ZETA 的 stdout 通常被重定向到文件/管道 ⇒ 全缓冲，
+                    // 不 flush 这条豁免行会一直躺在缓冲区里，"可观测"就成了空话。
+                    printf("[ZETA] BehaviorEngine: 自身注入器豁免 victim=%lu inj=%lu 本应加 %d 分 (累计 %d)\n",
+                           p.pid, inj, base, n);
+                    fflush(stdout);
+                }
+                return 0;
+            }
+
             bool injectorVerified = false;
             bool injectorTrusted = false;
             if (inj != 0) {
@@ -1808,6 +1838,82 @@ static std::wstring extractJsonObject(const std::wstring& json, const std::wstri
 // 解析一个对象中的数值字段集合 (以分号分隔的键值对风格不可用, 直接逐个 extractJsonInt)
 #define CFG_INT(obj, group, field, key) \
     cfg.group.field = extractJsonInt(obj, key, cfg.group.field)
+
+// ── YARA 证据权重的运行时校验（2026-10-06）──────────────────────────────
+// 编译期 static_assert 只保证了"默认值"安全；用户可以在 JSON 里改成任意值，
+// 这里把同一条契约在运行时再查一遍，违反则返回 false 并由调用方打 WARN ——
+// 不强制回退(尊重用户配置)，但绝不允许"悄悄改坏而无人知晓"。
+bool YaraScoreRuntime::validate(int warnThreshold, int alertThreshold, std::wstring* err) const {
+    auto fail = [&](const wchar_t* m) { if (err) *err = m; return false; };
+    if (weakPerHit < 0 || weakCap < 0 || normalPerHit < 0 || normalCap < 0 ||
+        strongPerHit < 0 || structuralSuspicious < 0) {
+        return fail(L"存在负权重");
+    }
+    if (weakCap > weakPerHit * 1000) return fail(L"weak_cap 与 weak_per_hit 明显不匹配");
+    // 契约①: 纯弱档不得触发提醒（否则能力型规则堆积又成噪声源）
+    if (weakCap >= warnThreshold) return fail(L"weak_cap 必须 < WARN_THRESHOLD");
+    // 契约②: 纯普通档不得越 ALERT，且默认也不应越过 WARN
+    if (normalCap >= alertThreshold) return fail(L"normal_cap 必须 < ALERT_THRESHOLD：否则能力型普通规则组合命中正常程序即误报");
+    // 契约③: 强签名必须单发即告警（这是唯一允许"单发决定性"的档位）
+    if (strongPerHit < alertThreshold) return fail(L"strong_per_hit 必须 >= ALERT_THRESHOLD：否则会漏掉真正的家族签名");
+    if (err) err->clear();
+    return true;
+}
+
+// ── YARA 证据权重加载（Rules_EDR.json 的 Rule_Scoring）(2026-10-06) ──
+// 与 loadContextConfig 同一套写法：从默认值开始 → 读 UTF-8 → 取子对象 → 逐字段覆盖。
+// 文件缺失或字段缺省时静默回退默认值（行为与改造前一致）。
+void ProcessBehaviorEngine::loadYaraScoreConfig(const std::wstring& path, std::wstring* warnOut) {
+    YaraScoreRuntime cfg;   // 默认值
+
+    std::wstring j;
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, path.c_str(), L"rb") != 0 || !f) {
+        m_yaraScore = cfg;
+        return;
+    }
+    fseek(f, 0, SEEK_END);
+    long len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (len <= 0) { fclose(f); m_yaraScore = cfg; return; }
+    std::string utf8(len, '\0');
+    fread(&utf8[0], 1, len, f);
+    fclose(f);
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), (int)utf8.size(), nullptr, 0);
+    if (wlen <= 0) { m_yaraScore = cfg; return; }
+    j.resize(wlen);
+    MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), (int)utf8.size(), &j[0], wlen);
+
+    const std::wstring obj = extractJsonObject(j, L"Rule_Scoring");
+    if (!obj.empty()) {
+        cfg.weakPerHit           = extractJsonInt(obj, L"yara_weak_per_hit",           cfg.weakPerHit);
+        cfg.weakCap              = extractJsonInt(obj, L"yara_weak_cap",              cfg.weakCap);
+        cfg.normalPerHit         = extractJsonInt(obj, L"yara_normal_per_hit",        cfg.normalPerHit);
+        cfg.normalCap            = extractJsonInt(obj, L"yara_normal_cap",            cfg.normalCap);
+        cfg.strongPerHit         = extractJsonInt(obj, L"yara_strong_per_hit",        cfg.strongPerHit);
+        cfg.structuralSuspicious = extractJsonInt(obj, L"yara_structural_suspicious", cfg.structuralSuspicious);
+    }
+
+    m_yaraScore = cfg;
+
+    // 本文件既没有 Logger 也不做正式日志(见 loadContextConfig 同样保持静默)，
+    // 只在调试器里留一行；对外上报交给调用方(appLog)。
+    {
+        wchar_t buf[256];
+        swprintf_s(buf, 256,
+            L"[EDR] YaraWeights weak=%d/cap%d normal=%d/cap%d strong=%d structural=%d (Rule_Scoring)\n",
+            m_yaraScore.weakPerHit, m_yaraScore.weakCap,
+            m_yaraScore.normalPerHit, m_yaraScore.normalCap,
+            m_yaraScore.strongPerHit, m_yaraScore.structuralSuspicious);
+        OutputDebugStringW(buf);
+    }
+
+    std::wstring why;
+    if (!m_yaraScore.validate(WARN_THRESHOLD, ALERT_THRESHOLD, &why)) {
+        if (warnOut) *warnOut = L"YARA 权重违反不变式(不阻断运行, 但可能误报或漏报): " + why;
+    }
+}
+
 
 void ProcessBehaviorEngine::loadContextConfig(const std::wstring& path) {
     // 从默认值开始解析, 文件缺失/字段缺省自动回退 (行为不变)

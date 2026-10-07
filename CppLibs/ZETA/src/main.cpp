@@ -38,6 +38,9 @@
 #include "zeta_ui_export.h"
 #undef ZETA_API
 
+// ── M2-3: zeta_tlsint 宿主侧（TLS 明文截获注入器 + 环消费/中央判定）──
+#include "tlsint_host.h"
+
 // C++ DLL 头文件 — 供引用类型使用（实际调用通过 LoadLibrary）
 #include <zeta_core.h>
 #include <zeta_driver.h>
@@ -1069,6 +1072,23 @@ static void appLog(const wchar_t* level, const wchar_t* action, const wchar_t* d
 }
 
 // ============================================================
+// M2-3: zeta_tlsint 宿主的日志/告警适配
+//   日志并入 appLog ⇒ 与其它模块一起出现在 ZETA_CPP.log 与 UI 日志面板；
+//   告警当前**只落日志、不做主动处置** —— 把它接入行为引擎评分/拦截
+//   （C2 黑名单命中加分、大样本外传触发处置）是 M2-3 的后续项。
+// ============================================================
+static void __stdcall tlsintHostLogFn(int level, const wchar_t* msg) {
+    appLog(level >= 2 ? L"WARN" : L"INFO", L"TlsInt", msg);
+}
+static void __stdcall tlsintHostAlertFn(int severity, unsigned long pid, int ruleId,
+                                        const wchar_t* ruleName, const wchar_t* detail) {
+    std::wstring d = L"PID=" + std::to_wstring(pid) +
+                     L" rule=" + (ruleName ? ruleName : L"?") +
+                     L"(" + std::to_wstring(ruleId) + L") " + (detail ? detail : L"");
+    appLog(severity >= 3 ? L"ALERT" : L"WARN", L"TlsInt", d.c_str());
+}
+
+// ============================================================
 // appendInterceptLog — 持久化拦截记录 (ZETA_Intercepts.log)
 //
 // 与 ZETA_CPP.log (全量调试日志) 分离，专门记录"真实拦截/处置"事件。
@@ -1802,14 +1822,21 @@ private:
         // 驱动侧模块比对会用【同一个 pid(ZETA 自身)】连发多条【不同驱动路径】候选,
         // 按 pid 去重会把后续候选路径全部吃掉(只看到第一条)。
         // 7014 的去重改为按 path 做, 见下方 case (含 5 分钟过期)。
+        // 2026-10-06 修正：原名单漏了 7011。它的唯一消费者(下方 case)在节流之后，
+        // 所以 (code,pid) 去重一命中就先 return —— 同对象 3 秒内第二次的"内核句柄访问"
+        // 连那条 WARN 都不会写，等于给 BYOVD 一条无痕通道。加入豁免即修复。
+        // 实测 ZETA_CPP.log 中 7011 命中 0 次，暂无刷屏风险；若将来高频，应给它
+        // 自己的按 path/更长时间窗去重（参照 7014 的做法），而不是退回 (code,pid) 节流。
         bool isIntegrityEvt = (code == ZETA_MSG_SELF_INTEGRITY_FAIL ||
                                code == ZETA_MSG_KERNEL_TAMPER_SUSPECT ||
-                               code == ZETA_MSG_ROGUE_DRIVER_LOADED);
+                               code == ZETA_MSG_ROGUE_DRIVER_LOADED ||
+                               code == ZETA_MSG_KERNEL_HANDLE_ALERT);
         if (!isIntegrityEvt && isThrottled(code, pid)) return;
 
         // 7011: 内核句柄访问受保护对象 —— 内核态打开不受 Ob 访问检查约束, 我们拦不住;
         // 但绝不能混在 INFO 流水里被淹没(那等于给恶意驱动/BYOVD 一条无痕通道)。
-        // 上面的 isThrottled(code,pid) 已做 3 秒去重, 不会刷屏。
+        // 2026-10-06: 本条已加入上面的 isIntegrityEvt 豁免名单 —— 原写法让去重先 return，
+        // 导致这条 WARN 根本执行不到（契约里标为 shouldBeExempt 的正是这点）。
         if (code == ZETA_MSG_KERNEL_HANDLE_ALERT) {
             appLog(L"WARN", L"安全告警",
                 (L"内核句柄访问受保护对象(无法阻断): 目标PID=" + std::to_wstring(pid) +
@@ -2116,6 +2143,11 @@ private:
                 if (!procName.empty()) {
                     onNewProcessCreated(pid, ppid, procName.c_str(), dosPath.c_str());
                 }
+
+                // ── M2-3: TLS 明文截获 —— 对符合条件的进程注入 zeta_tlsint.dll ──
+                // 过滤（系统进程/自身/系统目录/32位）与注入都在宿主模块内异步完成，
+                // 这里只入队，绝不阻塞驱动事件线程。
+                TlsIntHost_OnProcessCreate(pid, dosPath.c_str());
 
                 // ── P5: AMSI 扫描脚本宿主命令行 (无文件攻击检测) ──
                 // powershell IEX (New-Object Net.WebClient).DownloadString 等
@@ -3135,6 +3167,26 @@ static void doDriverInstallWork() {
         appLog(L"WARN", L"DiskFilter", L"ZETA_DiskFilter not available");
     }
 
+    // ── M2-3: 启动 TLS 明文截获宿主（注入器 + 环消费 + 中央判定）──
+    // DLL 与本进程同目录（部署约定）。DLL 缺失时只告警、不影响其它功能。
+    {
+        wchar_t selfPath[MAX_PATH] = { 0 };
+        GetModuleFileNameW(nullptr, selfPath, MAX_PATH);
+        std::wstring tlsDll = selfPath;
+        const size_t slash = tlsDll.find_last_of(L"\\/");
+        if (slash != std::wstring::npos) tlsDll.resize(slash + 1);
+        tlsDll += L"ZETA_TlsInt.dll";
+
+        TlsIntHost_SetLogFn(tlsintHostLogFn);
+        TlsIntHost_SetAlertFn(tlsintHostAlertFn);
+        if (TlsIntHost_Start(tlsDll.c_str()) == 0) {
+            appLog(L"INFO", L"TlsInt", (L"TLS 明文截获宿主已启动: " + tlsDll).c_str());
+        } else {
+            appLog(L"WARN", L"TlsInt",
+                   (L"TLS 明文截获未启用（DLL 缺失或不可读）: " + tlsDll).c_str());
+        }
+    }
+
     // 同步驱动状态到 UI（通过 invokeMethod 实现线程安全）
     if (p_zeta_ui_set_driver_status) {
         p_zeta_ui_set_driver_status(driverLoaded ? 1 : 0);
@@ -3215,6 +3267,17 @@ static void doDriverInstallWork() {
             swprintf_s(msg, 256, L"[WARN] Rules_EDR.json: Using defaults (init=%d)", edrInitResult);
             appLog(L"WARN", L"EDR", msg);
             printf("[ZETA] %ws\n", msg);
+        }
+
+        // ── YARA 证据权重 (Rules_EDR.json 的 Rule_Scoring) (2026-10-06) ──
+        {
+            std::wstring edrScorePath = g_pluginsDir + L"\\Rules\\Rules_EDR.json";
+            std::wstring yw;
+            ProcessBehaviorEngine::instance().loadYaraScoreConfig(edrScorePath, &yw);
+            if (!yw.empty()) {
+                appLog(L"WARN", L"EDR", yw.c_str());
+            }
+            printf("[ZETA] Rules_EDR.json: YARA score weights loaded\n");
         }
 
         // ── 第4层上下文评分配置 (Rules_Context.json) ──
@@ -5053,6 +5116,9 @@ int main(int argc, char* argv[]) {
     if (p_zeta_driver_disconnect) p_zeta_driver_disconnect();
     ProcessBehaviorEngine::instance().stop();
     DriverEventProcessor::instance().stop();
+
+    // 1a. 停止 TLS 明文截获宿主（注入线程 + 环消费线程；不再阻断后续卸载）
+    TlsIntHost_Stop();
 
     // 1b. 停止网络过滤器事件线程并卸载驱动
     g_netFilterRunning = false;

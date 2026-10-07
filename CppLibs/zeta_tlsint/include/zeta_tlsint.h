@@ -59,6 +59,9 @@ ZETA_TLSINT_API void  ZetaTlsInt_RingWrite(void* ring, int dir,
 ZETA_TLSINT_API unsigned long long ZetaTlsInt_GetCaptureCount(void);
 ZETA_TLSINT_API int ZetaTlsInt_GetLastError(void);
 ZETA_TLSINT_API int ZetaTlsInt_GetLastMhStatus(void);
+// 环不可达诊断: 0 = 环可用; 非 0 = EnsureRing 建/开环失败时的 GetLastError()
+// (5=ACCESS_DENIED 多为权限/掩码不匹配; 2=FILE_NOT_FOUND 多为环尚未被创建)
+ZETA_TLSINT_API unsigned long ZetaTlsInt_GetRingError(void);
 
 }
 

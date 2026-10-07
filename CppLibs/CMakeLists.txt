@@ -57,7 +57,46 @@ add_subdirectory(zeta_engine)
 add_subdirectory(zeta_monitor)
 add_subdirectory(zeta_hips)
 add_subdirectory(zeta_tlsint)
+# M2-3: TLS 明文截获的宿主侧（注入器 + 环消费/中央判定），由 ZETA.exe 内嵌
+add_subdirectory(zeta_tlsint_host)
 add_subdirectory(ZETA)
+
+# ── 事件契约校验（tools/event-contract/check.ps1）────────────────────────────
+# 背景: ZETA 有 39 个事件码, 而「每个码的生产者/消费者/pid 是 actor 还是 subject/
+#       降噪暴露」这份契约此前不存在于任何地方 —— 它散在几十个文件、注释和人的记忆里,
+#       于是每新增一个能力都要重新发现并单独补同一批不变量(详见
+#       EVENT-CONTRACT-INVENTORY.md)。本目标把那份契约变成可执行断言:
+#         · 新增事件码未在 contract.json 登记        → 失败
+#         · 声明有产生源但源码找不到 Send*(CODE)     → 失败
+#         · 声明无产生源(死码)但出现发送点           → 失败
+#         · 声明的消费者在对应文件里不存在           → 失败
+#         · 声明享受 L2 节流豁免但不在豁免名单里     → 失败
+#       消费点识别同时覆盖 `case X:` 与 `if (code == X)`, 避免漏判(7011 就是后者)。
+# 默认 OFF: 不改变既有构建节奏。
+#   cmake -S . -B build -DZETA_CHECK_EVENT_CONTRACT=ON   # 设为 ZETA 的前置依赖
+#   cmake --build build --target check-event-contract    # 或随时手动跑
+option(ZETA_CHECK_EVENT_CONTRACT "构建前校验事件契约 (contract.json vs 源码)" OFF)
+
+set(ZETA_CONTRACT_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/../tools/event-contract/check.ps1")
+
+if(EXISTS "${ZETA_CONTRACT_SCRIPT}")
+    find_program(ZETA_PWSH NAMES pwsh powershell)
+    if(NOT ZETA_PWSH)
+        set(ZETA_PWSH "pwsh")
+    endif()
+    add_custom_target(check-event-contract
+        COMMAND "${ZETA_PWSH}" -NoProfile -File "${ZETA_CONTRACT_SCRIPT}"
+        COMMENT "校验事件契约 (tools/event-contract): contract.json vs 真实源码"
+        VERBATIM)
+    if(ZETA_CHECK_EVENT_CONTRACT)
+        add_dependencies(ZETA check-event-contract)
+        message(STATUS "Event contract check: ENABLED (ZETA 依赖 check-event-contract)")
+    else()
+        message(STATUS "Event contract check: 可选目标 'check-event-contract' (默认不参与构建; 设 -DZETA_CHECK_EVENT_CONTRACT=ON 使其成为 ZETA 前置)")
+    endif()
+else()
+    message(STATUS "Event contract check: 跳过 (未找到 ${ZETA_CONTRACT_SCRIPT})")
+endif()
 
 message(STATUS "All ZETA C++ DLL targets configured")
 message(STATUS "  - zeta_core.dll: Logging, Config, Common")

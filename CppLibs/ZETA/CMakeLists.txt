@@ -24,6 +24,7 @@ target_include_directories(${PROJECT_NAME}
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../zeta_hips/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../zeta_monitor/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../zeta_driver/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../zeta_tlsint_host/include
     PRIVATE ${CMAKE_SOURCE_DIR}/../QtUI_DLL/src
 )
 
@@ -34,6 +35,7 @@ target_link_libraries(${PROJECT_NAME}
         user32.lib
         wintrust.lib
         ZETA_Driver
+        ZETA_TlsInt_Host
 )
 
 # zeta_ui 导入库：QtUI_DLL 是**独立的 CMake 工程**, 必须先构建它才能链接 ZETA.exe。

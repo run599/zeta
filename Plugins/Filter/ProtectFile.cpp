@@ -904,7 +904,15 @@ FLT_PREOP_CALLBACK_STATUS ProtectFile_PreWrite(PFLT_CALLBACK_DATA Data, PCFLT_RE
             SendMessageToUserWithContext(ZETA_MSG_RANSOM_FIRST_WRITE, (ULONG)(ULONG_PTR)Pid, nameInfo->Name.Buffer, nameInfo->Name.Length, &irpCtx);
             callbackStatus = FLT_PREOP_PENDING;
         } else {
-            DbgPrint("ZETA: PendOperation failed - allowing access for ransomware first-write\n");
+            // M1-8 (2026-10-06): 无客户端 fail-open 收口。勒索首写是高置信信号，
+            // UI 失联时不能放行 —— 原行为会让它整条落进放行路径。改为拒绝并完成 IRP。
+            // 注意：普通文件的 PendOperation 失败仍保持放行（见上方 no-user-mode-client 分支），
+            // 只有勒索判定的两条路径改 fail-closed，避免大面积误伤。
+            DbgPrint("ZETA: PendOperation failed - DENYING ransomware first-write (no user-mode client)\n");
+            SendMessageToUserWithContext(ZETA_MSG_RANSOM_FIRST_WRITE, (ULONG)(ULONG_PTR)Pid, nameInfo->Name.Buffer, nameInfo->Name.Length, &irpCtx);
+            Data->IoStatus.Status = STATUS_ACCESS_DENIED;
+            Data->IoStatus.Information = 0;
+            callbackStatus = FLT_PREOP_COMPLETE;
         }
     }
 
@@ -933,7 +941,12 @@ FLT_PREOP_CALLBACK_STATUS ProtectFile_PreWrite(PFLT_CALLBACK_DATA Data, PCFLT_RE
             SendMessageToUserWithContext(ZETA_MSG_RANSOM_ENTROPY_WRITE, (ULONG)(ULONG_PTR)Pid, nameInfo->Name.Buffer, nameInfo->Name.Length, &irpCtx);
             callbackStatus = FLT_PREOP_PENDING;
         } else {
-            DbgPrint("ZETA: PendOperation failed - allowing access for ransomware write\n");
+            // M1-8 (2026-10-06): 同上 —— 高熵写是勒索高置信信号，UI 失联时拒绝而非放行。
+            DbgPrint("ZETA: PendOperation failed - DENYING ransomware write (no user-mode client)\n");
+            SendMessageToUserWithContext(ZETA_MSG_RANSOM_ENTROPY_WRITE, (ULONG)(ULONG_PTR)Pid, nameInfo->Name.Buffer, nameInfo->Name.Length, &irpCtx);
+            Data->IoStatus.Status = STATUS_ACCESS_DENIED;
+            Data->IoStatus.Information = 0;
+            callbackStatus = FLT_PREOP_COMPLETE;
         }
     }
  }

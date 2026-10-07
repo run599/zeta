@@ -214,7 +214,7 @@
         "*\\CurrentControlSet\\Control\\CriticalDeviceDatabase\\*",
 
         "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Authentication\\LogonUI\\*",
-        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Authentication\\Credential Providers\\*",
+        "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Authentication\\Credential Providers\\*"
     ],
     "Rule_Registry_TrustedList": [
     ],

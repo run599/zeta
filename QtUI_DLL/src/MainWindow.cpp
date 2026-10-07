@@ -31,6 +31,10 @@
 #include <QResizeEvent>
 #include <QGridLayout>
 #include <QFileInfo>
+#include <QDir>
+#include <QHash>
+#include <QVector>
+#include <algorithm>
 #include <QRegularExpression>
 
 // Windows headers (after Qt to avoid conflicts)
@@ -47,6 +51,29 @@
 #include <iphlpapi.h>
 #include <dwmapi.h>
 #pragma comment(lib, "dwmapi.lib")
+
+// ============================================================================
+// M2-4: 删除一律走回收站（用户铁律）
+//
+// 背景: 备份副本删除 / 垃圾清理此前走 DeleteFileW = 永久删除, 误删不可恢复。
+//      本函数改用 SHFileOperationW(FO_DELETE | FOF_ALLOWUNDO) 送入回收站。
+// 例外: 隔离区的"彻底删除"语义即永久销毁(用户显式操作), 不走本函数。
+// 注意: SHFileOperationW 的 pFrom 必须是**双 NUL 结尾**的多字符串。
+// ============================================================================
+static bool zetaDeleteToRecycleBin(const QString& path) {
+    if (path.isEmpty()) return false;
+    const QString native = QDir::toNativeSeparators(path);
+    std::wstring buf(reinterpret_cast<const wchar_t*>(native.utf16()),
+                     static_cast<size_t>(native.size()));
+    buf.push_back(L'\0');
+    buf.push_back(L'\0');
+    SHFILEOPSTRUCTW op = {};
+    op.wFunc  = FO_DELETE;
+    op.pFrom  = buf.c_str();
+    op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+    const int rc = SHFileOperationW(&op);
+    return rc == 0 && !op.fAnyOperationsAborted;
+}
 
 // ============================================================================
 // 元数据编码自适应层
@@ -1627,7 +1654,7 @@ void MainWindow::setupJunkCleaner(QWidget* page) {
             auto* checkItem = m_junkTable->item(row, 0);
             if (checkItem && checkItem->checkState() == Qt::Checked) {
                 QString path = m_junkTable->item(row, 2)->text();
-                if (DeleteFileW((const wchar_t*)path.utf16())) {
+                if (zetaDeleteToRecycleBin(path)) {   // M2-4: 走回收站（原 DeleteFileW 为永久删除）
                     deleted++;
                     m_junkTable->item(row, 1)->setText("Deleted");
                 }
@@ -2329,7 +2356,7 @@ void MainWindow::setupRansomRestoreManager(QWidget* page) {
         int lastSlash = orig.lastIndexOf('\\');
         if (lastSlash > 0) QDir().mkpath(orig.left(lastSlash));
         if (CopyFileW((const wchar_t*)dest.utf16(), (const wchar_t*)orig.utf16(), FALSE)) {
-            DeleteFileW((const wchar_t*)dest.utf16());   // 恢复成功后清理副本, 释放空间
+            zetaDeleteToRecycleBin(dest);   // M2-4: 走回收站（原 DeleteFileW 为永久删除; 本条是自动清理, 最不该绕过回收站）
             onRefreshRansom();
             onAppendLog("INFO", "勒索恢复", "已恢复到原路径: " + orig);
         } else {
@@ -2383,7 +2410,7 @@ void MainWindow::setupRansomRestoreManager(QWidget* page) {
         auto sel = m_ransomTable->selectedItems();
         if (sel.isEmpty()) return;
         QString dest = m_ransomTable->item(sel[0]->row(), 1)->text();
-        if (DeleteFileW((const wchar_t*)dest.utf16())) {
+        if (zetaDeleteToRecycleBin(dest)) {   // M2-4: 走回收站
             onRefreshRansom();
             onAppendLog("INFO", "勒索防护备份", "已删除备份副本: " + dest);
         } else {
@@ -2401,7 +2428,7 @@ void MainWindow::setupRansomRestoreManager(QWidget* page) {
         if (m_ransomTable->rowCount() == 0) return;
         if (QMessageBox::question(this, QString::fromUtf8("清空备份"),
                 QString::fromUtf8("将删除全部 ") + QString::number(m_ransomTable->rowCount()) +
-                QString::fromUtf8(" 个备份副本，原路径文件不受影响。此操作不可撤销，是否继续？"),
+                QString::fromUtf8(" 个备份副本移入回收站（可从回收站恢复），原路径文件不受影响，是否继续？"),
                 QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes) {
             return;
         }
@@ -2409,7 +2436,7 @@ void MainWindow::setupRansomRestoreManager(QWidget* page) {
         for (int row = 0; row < m_ransomTable->rowCount(); row++) {
             const QString dest = m_ransomTable->item(row, 1)->text();
             if (dest.isEmpty()) continue;
-            if (DeleteFileW((const wchar_t*)dest.utf16())) ok++; else fail++;
+            if (zetaDeleteToRecycleBin(dest)) ok++; else fail++;   // M2-4: 走回收站
         }
         onRefreshRansom();
         onAppendLog(fail ? "WARN" : "INFO", "勒索防护备份",
@@ -2498,6 +2525,90 @@ void MainWindow::setupRansomRestoreManager(QWidget* page) {
     l->addWidget(policy);
 }
 
+// ── M2-4: 备份区滚动清理（用户态，全部走回收站）────────────────────────────
+// 规则:
+//   1) 同一"原文件"最多保留 keepVersions 个版本（默认 2），更旧的移入回收站
+//   2) 备份区总容量上限 maxBytes（默认 10 GB），超限时按最旧优先移入回收站
+// 命名格式（驱动侧 DocBackup_CopyFileToVault / ZetaVault_AppendIndex 约定）:
+//   doc_<pid>_<tick>_<原名>    /    ransom_<pid>_<tick>_<原名>
+// 删除统一走 zetaDeleteToRecycleBin（SHFileOperationW + FOF_ALLOWUNDO）。
+// 返回被清理的条目数；report 非空时写一行人类可读摘要。
+static const qint64 kZetaVaultMaxBytes = 10LL * 1024 * 1024 * 1024;   // 10 GB
+static const int    kZetaVaultKeepVersions = 2;
+
+static int zetaVaultEnforceQuota(const QString& vaultDir, qint64 maxBytes,
+                                 int keepVersions, QString* report) {
+    QDir dir(vaultDir);
+    if (!dir.exists()) return 0;
+
+    struct VEntry { QString path; QString orig; qint64 tick; qint64 size; };
+    QVector<VEntry> entries;
+
+    const QFileInfoList files = dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+    for (const QFileInfo& fi : files) {
+        const QString name = fi.fileName();
+        if (name.startsWith(QLatin1Char('.'))) continue;
+        if (name.endsWith(QStringLiteral(".info"), Qt::CaseInsensitive)) continue;
+        const QStringList parts = name.split(QLatin1Char('_'));
+        if (parts.size() < 4) continue;
+        bool ok = false;
+        const qint64 tick = parts.at(2).toLongLong(&ok);
+        if (!ok) continue;
+        VEntry e;
+        e.path = fi.absoluteFilePath();
+        e.orig = parts.mid(3).join(QLatin1Char('_'));
+        e.tick = tick;
+        e.size = fi.size();
+        entries.push_back(e);
+    }
+    if (entries.isEmpty()) return 0;
+
+    QVector<bool> dropped(entries.size(), false);
+
+    // 1) 同原名保留最近 keepVersions 个
+    QHash<QString, QVector<int>> byOrig;
+    for (int i = 0; i < entries.size(); ++i) byOrig[entries[i].orig].push_back(i);
+    for (auto it = byOrig.begin(); it != byOrig.end(); ++it) {
+        QVector<int>& idx = it.value();
+        std::sort(idx.begin(), idx.end(),
+                  [&](int a, int b) { return entries[a].tick > entries[b].tick; });
+        for (int k = keepVersions; k < idx.size(); ++k) dropped[idx[k]] = true;
+    }
+
+    // 2) 容量上限：剩余项按最旧优先淘汰
+    qint64 remain = 0;
+    for (int i = 0; i < entries.size(); ++i) if (!dropped[i]) remain += entries[i].size;
+    if (maxBytes > 0 && remain > maxBytes) {
+        QVector<int> alive;
+        for (int i = 0; i < entries.size(); ++i) if (!dropped[i]) alive.push_back(i);
+        std::sort(alive.begin(), alive.end(),
+                  [&](int a, int b) { return entries[a].tick < entries[b].tick; });
+        for (int idx : alive) {
+            if (remain <= maxBytes) break;
+            dropped[idx] = true;
+            remain -= entries[idx].size;
+        }
+    }
+
+    int removed = 0;
+    qint64 freed = 0;
+    for (int i = 0; i < entries.size(); ++i) {
+        if (!dropped[i]) continue;
+        if (zetaDeleteToRecycleBin(entries[i].path)) { removed++; freed += entries[i].size; }
+    }
+
+    if (report && removed > 0) {
+        *report = QString::fromUtf8("备份区滚动清理 %1: 移入回收站 %2 个（约 %3 MB），上限 %4 MB / 同文件保留 %5 版")
+                      .arg(vaultDir)
+                      .arg(removed)
+                      .arg(freed / 1048576.0, 0, 'f', 1)
+                      .arg(maxBytes / 1048576.0, 0, 'f', 0)
+                      .arg(keepVersions);
+    }
+    return removed;
+}
+
+
 void MainWindow::onRefreshRansom() {
     if (!m_ransomTable) return;
     m_ransomTable->setRowCount(0);
@@ -2505,6 +2616,17 @@ void MainWindow::onRefreshRansom() {
     wchar_t winBuf[MAX_PATH] = {0};
     if (GetWindowsDirectoryW(winBuf, MAX_PATH) == 0) return;
     const QString winDir = QString::fromWCharArray(winBuf);
+
+    // M2-4: 刷新前先做一次滚动清理（容量上限 + 同文件保留 N 版），删除全部走回收站
+    {
+        const wchar_t* vaultDirs[] = { L"ZETA_DocBackup", L"ZETA_Quarantine" };
+        for (const wchar_t* vd : vaultDirs) {
+            QString rep;
+            zetaVaultEnforceQuota(winDir + "\\" + QString::fromWCharArray(vd),
+                                  kZetaVaultMaxBytes, kZetaVaultKeepVersions, &rep);
+            if (!rep.isEmpty()) onAppendLog("INFO", "勒索防护备份", rep);
+        }
+    }
 
     struct VaultSpec { const wchar_t* dir; const wchar_t* kind; };
     const VaultSpec vaults[] = {
